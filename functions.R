@@ -62,6 +62,40 @@ loadTradeData <- function(filename, removeColumns = TRUE) {
 }
 
 
+formatFullData <- function(input) {
+	
+	# add Mid and index to full data
+	fullData <- as.data.frame(input)
+	colnames(fullData) <- c("Open", "High", "Low", "Close", "Volume")
+	fullData$Mid <- (fullData$Open + fullData$Close) / 2
+	fullData$index <- 1:nrow(fullData)
+	
+	# add true range and ATR
+	fullData$atr <- fullData$trueRange <- rep(0, nrow(fullData))
+	if(nrow(fullData) > 14) {
+		for(i in 2:nrow(fullData)) {
+			fullData$trueRange[i] <- max(c(fullData$High[i] - fullData$Low[i], 
+							abs(fullData$High[i] - fullData$Close[i-1]), 
+							abs(fullData$Low[i] - fullData$Close[i-1])
+					)
+			)
+		}
+		for(i in 15:nrow(fullData)) {
+			fullData$atr[i] <- mean(fullData$trueRange[(i-13):i])
+		}
+	}
+	
+	
+	# extract the time for the full data
+	dateTimes <- unlist(strsplit(rownames(fullData), " "))
+	days <- dateTimes[which((1:length(dateTimes) %% 2) == 1)]
+	fullData$time <- dateTimes[which((1:length(dateTimes) %% 2) == 0)]
+	
+	# remove the weird last row # TODO look into improving
+	fullData <- fullData[-nrow(fullData), ]
+	
+	return(fullData)
+}
 
 # function definition
 vizTrade <- function(data, plotNum = 1, 
@@ -88,34 +122,9 @@ vizTrade <- function(data, plotNum = 1,
 		}
 	}
 	
-	
-	# add Mid and index to full data
-	fullData <- as.data.frame(get(x))
-	colnames(fullData) <- c("Open", "High", "Low", "Close", "Volume")
-	fullData$Mid <- (fullData$Open + fullData$Close) / 2
-	fullData$index <- 1:nrow(fullData)
-	
-	# add true range and ATR
-	fullData$atr <- fullData$trueRange <- rep(0, nrow(fullData))
-	if(nrow(fullData) > 14) {
-		for(i in 2:nrow(fullData)) {
-			fullData$trueRange[i] <- max(c(fullData$High[i] - fullData$Low[i], 
-							abs(fullData$High[i] - fullData$Close[i-1]), 
-							abs(fullData$Low[i] - fullData$Close[i-1])
-					)
-			)
-		}
-		for(i in 15:nrow(fullData)) {
-			fullData$atr[i] <- mean(fullData$trueRange[(i-13):i])
-		}
-	}
+	# define the fullData object
+	fullData <- formatFullData(input = get(x))
 		
-	
-	# extract the time for the full data
-	dateTimes <- unlist(strsplit(rownames(fullData), " "))
-	days <- dateTimes[which((1:length(dateTimes) %% 2) == 1)]
-	fullData$time <- dateTimes[which((1:length(dateTimes) %% 2) == 0)]
-	
 	
 	# define the base chart
 	myChart <- chart_Series(get(x)[-nrow(get(x)), ], name = paste0(ticker, ": ", from, ", ATR x ", atrMultiplier, 
@@ -141,16 +150,6 @@ vizTrade <- function(data, plotNum = 1,
 		}
 	}
 	
-
-	
-#	# plot the ATR points over time
-#	if(showATR & tmpData$Quantity[1] > 0) {   # TODO maybe generalize for all trades
-#		points(x = fullData$index, 
-#				y = fullData$Mid - (atrMultiplier) * fullData$atr)
-#	} else if(showATR & tmpData$Quantity[1] < 0) {
-#		points(x = fullData$index, 
-#				y = fullData$Mid + (atrMultiplier) * fullData$atr)
-#	}
 	
 	# plot the buys and sells as points
 	points(x = tmpData$xValue, y = tmpData$T..Price, col = tmpData$tradeColor, 
@@ -160,4 +159,91 @@ vizTrade <- function(data, plotNum = 1,
 	legend("topright", legend = c("BOT", "SLD"), col = c(oaColors("blue"), oaColors("red")), 
 			pch = 19)
 	
+}
+
+
+
+calcPLStrategy <- function(data, plotNum, 
+		stopLossMult, profitTakeMult) {
+	tmpData <- data[which(data$plotNum == plotNum), ]
+	
+	from <- tmpData$day[1]
+	to <- ymd(from) + duration(1, "days")
+	ticker <- tmpData$Symbol[1]
+	
+	x <- getSymbols(ticker, src="yahoo", 
+			periodicity = "1 minutes", 
+			from = from, to = to)
+	
+	# fill in missing values # TODO improve
+	idx <- which(is.na(get(x)[, 1]))
+	if(length(idx) > 0) {
+		for(jIdx in 1:length(idx)) {
+			
+			tmp <- get(x)
+			tmp[idx[jIdx], ] <- tmp[idx[jIdx] - 1, ]
+			assign(x,  value =  tmp)
+		}
+	}
+	
+	# define the fullData object
+	fullData <- formatFullData(input = get(x))
+	
+	# match trade data index to fullData index
+	substr(tmpData$time, 7, 8) <- "00"
+	
+	matchedIdx <- which(fullData$time == tmpData$time[1])
+	
+	# BOT
+	if(tmpData$Quantity[1] > 0) {
+		
+		stopLoss <- tmpData$T..Price[1] - stopLossMult * fullData$atr[matchedIdx]
+		profitTake <- tmpData$T..Price[1] + profitTakeMult * fullData$atr[matchedIdx]
+		
+		# take the stop loss indices that are greater than our trade start (matchedIdx)
+		stopIdx <- which(fullData$Close <= stopLoss)
+		if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
+		
+		# get the profit take indices
+		profIdx <- which(fullData$Close >= profitTake)
+		if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
+		
+		if(length(stopIdx) == 0 & length(profIdx) > 0) {
+			pl <- (profitTake - tmpData$T..Price[1]) / tmpData$T..Price[1] # winner
+		} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
+			pl <- (stopLoss - tmpData$T..Price[1]) / tmpData$T..Price[1]  # loser
+		} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
+			pl <- (fullData$Close[nrow(fullData)] - tmpData$T..Price) / tmpData$T..Price[1] # end of day
+		} else if(profIdx[1] < stopIdx[1]) {
+			pl <- (profitTake - tmpData$T..Price[1]) / tmpData$T..Price[1] # winner
+		} else 
+			pl <- (stopLoss - tmpData$T..Price[1]) / tmpData$T..Price[1]  # loser
+		
+	} else {  # SLD
+		
+		stopLoss <- tmpData$T..Price[1] + stopLossMult * fullData$atr[matchedIdx]
+		profitTake <- tmpData$T..Price[1] - profitTakeMult * fullData$atr[matchedIdx]
+		
+		# take the stop loss indices that are greater than our trade start (matchedIdx)
+		stopIdx <- which(fullData$Close >= stopLoss)
+		if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
+		
+		# get the profit take indices
+		profIdx <- which(fullData$Close <= profitTake)
+		if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
+		
+		if(length(stopIdx) == 0 & length(profIdx) > 0) {
+			pl <- (tmpData$T..Price[1] - profitTake) / tmpData$T..Price[1] # winner
+		} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
+			pl <- (tmpData$T..Price[1] - stopLoss) / tmpData$T..Price[1]  # loser
+		} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
+			pl <- (tmpData$T..Price - fullData$Close[nrow(fullData)]) / tmpData$T..Price[1] # end of day
+		} else if(profIdx[1] < stopIdx[1]) {
+			pl <- (tmpData$T..Price[1] - profitTake) / tmpData$T..Price[1] # winner
+		} else 
+			pl <- (tmpData$T..Price[1] - stopLoss) / tmpData$T..Price[1]  # loser
+		
+	}  
+	
+	return(pl)
 }
