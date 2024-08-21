@@ -162,9 +162,95 @@ vizTrade <- function(data, plotNum = 1,
 }
 
 
+# TODO add volume to plots
+
+# function definition
+vizTradeAndStrategy <- function(data, plotNum = 1, 
+		stopLossMult = 4, profitTakeMult = 3.5) {
+	
+	tmpData <- data[which(data$plotNum == plotNum), ]
+	
+	from <- tmpData$day[1]
+	to <- ymd(from) + duration(1, "days")
+	ticker <- tmpData$Symbol[1]
+	
+	x <- getSymbols(ticker, src="yahoo", 
+			periodicity = "1 minutes", 
+			from = from, to = to)
+	
+	# fill in missing values # TODO improve
+	idx <- which(is.na(get(x)[, 1]))
+	if(length(idx) > 0) {
+		for(jIdx in 1:length(idx)) {
+			
+			tmp <- get(x)
+			tmp[idx[jIdx], ] <- tmp[idx[jIdx] - 1, ]
+			assign(x,  value =  tmp)
+		}
+	}
+	
+	# define the fullData object
+	fullData <- formatFullData(input = get(x))
+	
+	
+	# define the base chart
+	myChart <- chart_Series(get(x)[-nrow(get(x)), ], name = paste0(ticker, ": ", from, ", stopLossMult = ",
+					stopLossMult, ", profitTakeMult = ", profitTakeMult, 
+					", Profit = ", round(sum(tmpData$Realized.P.L), 2)  ) )
+	print(myChart)
+	
+	# match trade data index to fullData index
+	tmpData$xValue <- rep(0, nrow(tmpData))
+	tmpData$tradeColor <- rep("", nrow(tmpData))
+	substr(tmpData$time, 7, 8) <- "00"
+	for(kTmp in 1:nrow(tmpData)) { # kTmp <- 1
+		matchedIdx <- which(fullData$time == tmpData$time[kTmp]) # starting x-value of the trade
+		tmpData$xValue[kTmp] <- matchedIdx
+		tmpData$tradeColor[kTmp] <- ifelse(tmpData$Quantity[kTmp] > 0, oaColors("blue"), oaColors("red"))
+		
+		# plot ATR
+		if(tmpData$Quantity[kTmp] > 0 & (kTmp %% 2) == 1) {
+			
+			# TODO add code for computing xright better
+			
+			rect(xleft = tmpData$xValue[kTmp], 
+					xright = nrow(fullData), 
+					ybottom = tmpData$T..Price[kTmp], 
+					ytop = tmpData$T..Price[kTmp] - stopLossMult * fullData$atr[matchedIdx],
+					col = oaColors("red", alpha = 0.3), border = NA)
+			rect(xleft = tmpData$xValue[kTmp], 
+					xright = nrow(fullData), 
+					ybottom = tmpData$T..Price[kTmp], 
+					ytop = tmpData$T..Price[kTmp] + profitTakeMult * fullData$atr[matchedIdx],
+					col = oaColors("green", alpha = 0.3), border = NA)
+		
+		} else if(tmpData$Quantity[kTmp] < 0 & (kTmp %% 2) == 1) {
+			rect(xleft = tmpData$xValue[kTmp], 
+					xright = nrow(fullData), 
+					ybottom = tmpData$T..Price[kTmp], 
+					ytop = tmpData$T..Price[kTmp] + stopLossMult * fullData$atr[matchedIdx],
+					col = oaColors("red", alpha = 0.3), border = NA)
+			rect(xleft = tmpData$xValue[kTmp], 
+					xright = nrow(fullData), 
+					ybottom = tmpData$T..Price[kTmp], 
+					ytop = tmpData$T..Price[kTmp] - profitTakeMult * fullData$atr[matchedIdx],
+					col = oaColors("green", alpha = 0.3), border = NA)
+		}
+	}
+	
+	
+	# plot the buys and sells as points
+	points(x = tmpData$xValue, y = tmpData$T..Price, col = tmpData$tradeColor, 
+			pch = 19, cex = 1.5)
+	
+	# legend (can probably remove later)
+	legend("topright", legend = c("BOT", "SLD"), col = c(oaColors("blue"), oaColors("red")), 
+			pch = 19)
+	
+}
 
 calcPLStrategy <- function(data, plotNum, 
-		stopLossMult, profitTakeMult) {
+		stopValues, profitTakes) {
 	tmpData <- data[which(data$plotNum == plotNum), ]
 	
 	from <- tmpData$day[1]
@@ -194,56 +280,73 @@ calcPLStrategy <- function(data, plotNum,
 	
 	matchedIdx <- which(fullData$time == tmpData$time[1])
 	
-	# BOT
-	if(tmpData$Quantity[1] > 0) {
-		
-		stopLoss <- tmpData$T..Price[1] - stopLossMult * fullData$atr[matchedIdx]
-		profitTake <- tmpData$T..Price[1] + profitTakeMult * fullData$atr[matchedIdx]
-		
-		# take the stop loss indices that are greater than our trade start (matchedIdx)
-		stopIdx <- which(fullData$Close <= stopLoss)
-		if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
-		
-		# get the profit take indices
-		profIdx <- which(fullData$Close >= profitTake)
-		if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
-		
-		if(length(stopIdx) == 0 & length(profIdx) > 0) {
-			pl <- (profitTake - tmpData$T..Price[1]) / tmpData$T..Price[1] # winner
-		} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
-			pl <- (stopLoss - tmpData$T..Price[1]) / tmpData$T..Price[1]  # loser
-		} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
-			pl <- (fullData$Close[nrow(fullData)] - tmpData$T..Price) / tmpData$T..Price[1] # end of day
-		} else if(profIdx[1] < stopIdx[1]) {
-			pl <- (profitTake - tmpData$T..Price[1]) / tmpData$T..Price[1] # winner
-		} else 
-			pl <- (stopLoss - tmpData$T..Price[1]) / tmpData$T..Price[1]  # loser
-		
-	} else {  # SLD
-		
-		stopLoss <- tmpData$T..Price[1] + stopLossMult * fullData$atr[matchedIdx]
-		profitTake <- tmpData$T..Price[1] - profitTakeMult * fullData$atr[matchedIdx]
-		
-		# take the stop loss indices that are greater than our trade start (matchedIdx)
-		stopIdx <- which(fullData$Close >= stopLoss)
-		if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
-		
-		# get the profit take indices
-		profIdx <- which(fullData$Close <= profitTake)
-		if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
-		
-		if(length(stopIdx) == 0 & length(profIdx) > 0) {
-			pl <- (tmpData$T..Price[1] - profitTake) / tmpData$T..Price[1] # winner
-		} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
-			pl <- (tmpData$T..Price[1] - stopLoss) / tmpData$T..Price[1]  # loser
-		} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
-			pl <- (tmpData$T..Price - fullData$Close[nrow(fullData)]) / tmpData$T..Price[1] # end of day
-		} else if(profIdx[1] < stopIdx[1]) {
-			pl <- (tmpData$T..Price[1] - profitTake) / tmpData$T..Price[1] # winner
-		} else 
-			pl <- (tmpData$T..Price[1] - stopLoss) / tmpData$T..Price[1]  # loser
-		
-	}  
+	# define the profit-loss matrix
+	plMatrix <- matrix(0, nrow = length(stopValues), ncol = length(profitTakes))
+	rownames(plMatrix) <- stopValues
+	colnames(plMatrix) <- profitTakes
 	
-	return(pl)
+	for(kStop in 1:length(stopValues)) {  
+		for(jProf in 1:length(profitTakes)) {
+			
+			stopLossMult <- stopValues[kStop]
+			profitTakeMult <- profitTakes[jProf]
+			
+			# BOT
+			if(tmpData$Quantity[1] > 0) {
+				
+				stopLoss <- tmpData$T..Price[1] - stopLossMult * fullData$atr[matchedIdx]
+				profitTake <- tmpData$T..Price[1] + profitTakeMult * fullData$atr[matchedIdx]
+				
+				# take the stop loss indices that are greater than our trade start (matchedIdx)
+				stopIdx <- which(fullData$Close <= stopLoss)
+				if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
+				
+				# get the profit take indices
+				profIdx <- which(fullData$Close >= profitTake)
+				if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
+				
+				if(length(stopIdx) == 0 & length(profIdx) > 0) {
+					pl <- (profitTake - tmpData$T..Price[1]) / tmpData$T..Price[1] # winner
+				} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
+					pl <- (stopLoss - tmpData$T..Price[1]) / tmpData$T..Price[1]  # loser
+				} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
+					pl <- (fullData$Close[nrow(fullData)] - tmpData$T..Price[1]) / tmpData$T..Price[1] # end of day
+				} else if(profIdx[1] < stopIdx[1]) {
+					pl <- (profitTake - tmpData$T..Price[1]) / tmpData$T..Price[1] # winner
+				} else 
+					pl <- (stopLoss - tmpData$T..Price[1]) / tmpData$T..Price[1]  # loser
+				
+			} else {  # SLD
+				
+				stopLoss <- tmpData$T..Price[1] + stopLossMult * fullData$atr[matchedIdx]
+				profitTake <- tmpData$T..Price[1] - profitTakeMult * fullData$atr[matchedIdx]
+				
+				# take the stop loss indices that are greater than our trade start (matchedIdx)
+				stopIdx <- which(fullData$Close >= stopLoss)
+				if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
+				
+				# get the profit take indices
+				profIdx <- which(fullData$Close <= profitTake)
+				if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
+				
+				if(length(stopIdx) == 0 & length(profIdx) > 0) {
+					pl <- (tmpData$T..Price[1] - profitTake) / tmpData$T..Price[1] # winner
+				} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
+					pl <- (tmpData$T..Price[1] - stopLoss) / tmpData$T..Price[1]  # loser
+				} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
+					pl <- (tmpData$T..Price[1] - fullData$Close[nrow(fullData)]) / tmpData$T..Price[1] # end of day
+				} else if(profIdx[1] < stopIdx[1]) {
+					pl <- (tmpData$T..Price[1] - profitTake) / tmpData$T..Price[1] # winner
+				} else 
+					pl <- (tmpData$T..Price[1] - stopLoss) / tmpData$T..Price[1]  # loser
+				
+			}  
+			
+			plMatrix[kStop, jProf] <- pl
+			
+		}
+	}
+	
+	
+	return(plMatrix)
 }

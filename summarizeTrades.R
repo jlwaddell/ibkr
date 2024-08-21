@@ -1,6 +1,7 @@
 
 
 # libraries
+setwd("C:/Users/Jason/git/ibkr")
 library(quantmod)
 library(calendar)
 library(oaColors)
