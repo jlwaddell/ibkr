@@ -6,11 +6,12 @@ library(calendar)
 library(oaColors)
 library(lubridate)
 library(dplyr)
+library(oaPlots)
 
 
 source("./functions/plotFunctions.R")
 source("./functions/loadingFunctions.R")
-source("./functions/utilFunctions.R")
+source("./functions/calcFunctions.R")
 
 ################# read in the data and preprocess #######################3
 # read data
@@ -36,8 +37,13 @@ data$plotNum <- as.numeric(as.factor(data$plotNum))
 
 pdf("selectedTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 2
+#for(plotNum in 30:40) {
 	vizTradeAndStrategy(data, plotNum = plotNum, 
-			stopLossMult = 4, profitTakeMult = 3.5)
+			stopLossMult = 4, profitTakeMult = 3.5, 
+			omitTimepoints = c(1:10, 380:390), 
+			includeADX = TRUE, 
+			periodicity = "1 minutes", 
+			dataType = "normal")
 }
 dev.off()
 

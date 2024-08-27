@@ -287,3 +287,19 @@ calcPLStrategy <- function(data, plotNum,
 	
 	return(plMatrix)
 }
+
+
+
+
+calcPVT <- function(close, volume) {
+	
+	pvt <- rep(0, length(close))
+	for(j in 2:length(close)) {
+		pvt[j] <- pvt[j-1] + ((close[j] - close[j-1]) / close[j-1]) * volume[j]
+	}
+	
+	return(pvt)
+}
+
+
+

@@ -1,12 +1,20 @@
 
-loadData <- function(tmpData) {
+loadData <- function(tmpData, periodicity = "1 minutes", 
+		dataType = "normal") {
 	
-	from <- tmpData$day[1]
-	to <- ymd(from) + duration(1, "days")
-	ticker <- tmpData$Symbol[1]
+	if(dataType == "train") {
+		from <- tmpData$Date[1]
+		from <- ymd(from) + duration(0, "days")
+		to <- ymd(from) + duration(1, "days")
+		ticker <- tmpData$Ticker[1]
+	} else {
+		from <- tmpData$day[1]
+		to <- ymd(from) + duration(1, "days")
+		ticker <- tmpData$Symbol[1]
+	}
 	
 	x <- getSymbols(ticker, src="yahoo", 
-			periodicity = "1 minutes", 
+			periodicity = periodicity, 
 			from = from, to = to)
 	
 	# fill in missing values # TODO improve
@@ -29,6 +37,7 @@ loadData <- function(tmpData) {
 	
 	return(list(full = fullData, raw = rawData))
 }
+
 
 
 formatTmpData <- function(data, plotNum) {
@@ -74,7 +83,20 @@ formatFullData <- function(input) {
 	# OBV
 	fullData$OBV <- OBV(price = Cl(input), volume = Vo(input))
 	
-	# remove the weird last row # TODO look into improving
+	# MACD
+	macdObj <- MACD(x = Cl(input), maType = "EMA", percent = TRUE, 
+			nFast = 6, nSlow = 13, nSig = 3) # TODO explore other numbers
+	fullData$MACD <- macdObj$macd
+	fullData$signal <- macdObj$signal
+	
+	# ADX
+	fullData <- cbind.data.frame(fullData, ADX(input, maType = "EMA", n = 25))
+	
+	# Parabolic SAR
+	fullData$sar <- SAR(fullData[, c("High", "Low")], accel = c(0.01, 0.1))$sar
+	
+	# remove the weird last row
+	# TODO look into improving
 	fullData <- fullData[-nrow(fullData), ]
 	
 	return(fullData)
