@@ -14,11 +14,11 @@ source("./functions/plotFunctions.R")
 source("./functions/loadingFunctions.R")
 source("./functions/calcFunctions.R")
 
-startFromScratch <- TRUE
+startFromScratch <- FALSE
 if(startFromScratch) {
 	dataList <- list()
 } else {
-	load("data1min.RData")
+	load("data2min.RData")
 }
 
 periodicity <- "2 minutes" # TODO think about this
@@ -88,9 +88,12 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 # read data
 
 filename <- list.files("./data", pattern = "Stock Train")
-data <- as.data.frame(read_excel("./data/Stock Train Data.xlsx"))
+data <- as.data.frame(read_excel(paste0("./data/", filename)))
 
-data <- data[-which(data$Date == as.Date("2024-07-26")), ]
+data <- data[-which(as.Date(data$Date) %in% 
+						c(as.Date("2024-07-26"), as.Date("2024-07-11"), 
+								as.Date("2024-07-12"))),
+		]
 data$plotNum <- 1:nrow(data)
 
 for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1

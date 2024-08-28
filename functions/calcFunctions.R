@@ -303,3 +303,57 @@ calcPVT <- function(close, volume) {
 
 
 
+
+compute_r_squared_moving_window <- function(prices, window_size) {
+	# Create a vector to store R-squared values
+	r_squared_values <- rep(NA, length(prices))
+	
+	# Loop over the data to compute R-squared for each window
+	for (i in window_size:length(prices)) {
+		# Extract the window data
+		window_prices <- prices[(i - window_size + 1):i]
+		time <- 1:window_size
+		
+		# Fit linear regression model
+		model <- lm(window_prices ~ time)
+		
+		# Get the R-squared value
+		r_squared <- summary(model)$r.squared
+		
+		# Store the R-squared value
+		r_squared_values[i] <- r_squared
+	}
+	
+	# Return the vector of R-squared values
+	return(r_squared_values)
+}
+
+
+# Function to compute the Choppiness Index
+compute_choppiness_index <- function(fullData, period = 14) {
+	# Create a data frame with the OHLC data
+	ohlc <- fullData[, c("Open", "High", "Low", "Close")]
+	
+	# Calculate the Choppiness Index
+	choppiness_index <- rep(NA, nrow(ohlc))  # Initialize the result vector
+	
+	for (i in period:nrow(ohlc)) {
+		# Subset the data for the current period
+		high_period <- ohlc$High[(i-period+1):i]
+		low_period <- ohlc$Low[(i-period+1):i]
+		
+		# Calculate the numerator and denominator
+		sum_range <- sum(high_period - low_period)
+		max_high <- max(high_period)
+		min_low <- min(low_period)
+		
+		# Choppiness Index formula
+		chop_value <- 100 * log10(sum_range / (max_high - min_low)) / log10(period)
+		
+		# Store the value
+		choppiness_index[i] <- chop_value
+	}
+	
+	# Return the computed Choppiness Index
+	return(choppiness_index/100)
+}

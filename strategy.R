@@ -40,7 +40,7 @@ for(i in 1:length(remTickers)) {
 data$plotNum <- as.numeric(as.factor(data$plotNum))
 
 pdf("selectedTrades.pdf", width = 10, height = 8)
-for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 1
+for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 10
 	vizTradeAndStrategy(data = data, dataList = dataList, 
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
@@ -65,10 +65,11 @@ dev.off()
 
 pdf("tradeSetups.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
-	vizSingleTrade(data = data, dataList = dataList, 
+	vizTradeAndStrategy(data = data, dataList = dataList, 
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
-			minutesBefore = 60, ending = "tradeStart")
+			timepointsBefore = 60, ending = "tradeStart", 
+			includeADX = TRUE)
 }
 dev.off()
 

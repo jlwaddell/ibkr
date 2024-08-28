@@ -47,7 +47,7 @@ vizTradeAndStrategy <- function(data, dataList,
 			matchedIdx <- which(timeDiffs == min(timeDiffs))[1]
 		}
 	}
-		
+	
 	# calculate start time
 	if(!is.null(timepointsBefore)) {
 		startIdx <- max(c(1, matchedIdx - timepointsBefore))
@@ -66,6 +66,7 @@ vizTradeAndStrategy <- function(data, dataList,
 	
 	# subset fullData
 	fullData <- fullData[startIdx:endIdx, ]
+	fullData$index <- 1:nrow(fullData)
 	
 	# layout for secondPlot
 	if(includeADX) {
@@ -80,12 +81,12 @@ vizTradeAndStrategy <- function(data, dataList,
 		plotTitle <- paste0(ticker, ": ", from)
 	} else {
 		plotTitle <- paste0(ticker, ": ", from, ", stopLossMult = ",
-				stopLossMult, ", profitTakeMult = ", profitTakeMult, 
-				", Profit = ", round(sum(tmpData$Realized.P.L), 2)  )
+				stopLossMult, ", profitTakeMult = ", profitTakeMult)
+#		, ", Profit = ", round(sum(tmpData$Realized.P.L), 2) 
 	}
 	
 	# define the base chart
-	myChart <- chart_Series(rawData, name = plotTitle)
+	myChart <- chart_Series(rawData[startIdx:endIdx, ], name = plotTitle)
 	print(myChart)
 	
 	
@@ -97,10 +98,16 @@ vizTradeAndStrategy <- function(data, dataList,
 	volMinY <- par("usr")[3]
 	volMaxY <- par("usr")[3] + 0.08 * (par("usr")[4] - par("usr")[3])
 	volMaxHeight <- volMaxY - volMinY
-		
+	
+	colVecVolume <- rep("white", nrow(fullData))
+	colVecVolume[which(fullData$Close < fullData$Open)] <- "red"
+	
 	rect(xleft = fullData$index - 0.5, xright = fullData$index + 0.5, 
 			ybottom = volMinY, 
-			ytop = volMinY + (fullData$Volume / volThresh) * volMaxHeight)
+			ytop = volMinY + (fullData$Volume / volThresh) * volMaxHeight, 
+			col = colVecVolume)
+	
+	
 	
 	# match trade data index to fullData index
 	if(dataType == "normal") {
@@ -108,12 +115,17 @@ vizTradeAndStrategy <- function(data, dataList,
 		tmpData$tradeColor <- rep("", nrow(tmpData))
 		substr(tmpData$time, 7, 8) <- "00"
 		for(kTmp in 1:nrow(tmpData)) { # kTmp <- 1
-
+			
 			# starting x-value of the trade
 			matchedIdx <- which(fullData$time == tmpData$time[kTmp])
 			if(length(matchedIdx) == 0) {
+				timeDiffsRaw <- as.numeric(hms(fullData$time) - hms(tmpData$time[kTmp]))
+				if(all(timeDiffsRaw < -120)) {  # TODO look into
+					matchedIdx <- NA
+				} else {
 					timeDiffs <- abs(as.numeric(hms(fullData$time) - hms(tmpData$time[kTmp])))
 					matchedIdx <- which(timeDiffs == min(timeDiffs))[1]
+				}
 			}
 			
 			tmpData$xValue[kTmp] <- matchedIdx
@@ -158,17 +170,18 @@ vizTradeAndStrategy <- function(data, dataList,
 	}
 	
 	# plot OBV
-#	fullData$OBV <- OBV(price = fullData$Close, volume = fullData$volAdj) # TODO remove
-#	scaledOBV <- (fullData$OBV - min(fullData$OBV)) / diff(range(fullData$OBV))
-#	scaledOBV <- min(fullData$Close) + scaledOBV * abs(diff(range(fullData$Close)))
-#	lines(x = 1:nrow(fullData), y = scaledOBV, lwd = 1.5)
+	fullData$OBV <- OBV(price = fullData$Close, volume = fullData$volAdj) # TODO remove
+	scaledOBV <- (fullData$OBV - min(fullData$OBV)) / diff(range(fullData$OBV))
+	scaledOBV <- min(fullData$Close) + scaledOBV * abs(diff(range(fullData$Close)))
+	lines(x = 1:nrow(fullData), y = scaledOBV, lwd = 1.5)
 	
 	# pvt
 	pvt <- fullData$pvt
-	scaledPVT <- (pvt - min(pvt)) / diff(range(pvt))
-	scaledPVT <- min(fullData$Close) + scaledPVT * abs(diff(range(fullData$Close)))
+	scaledPVT <- (pvt - min(pvt, na.rm = TRUE)) / diff(range(pvt, na.rm = TRUE))
+	scaledPVT <- min(fullData$Close) + scaledPVT * 
+			abs(diff(range(fullData$Close, na.rm = TRUE)))
 	lines(x = 1:nrow(fullData), y = scaledPVT, lwd = 1.5, col = "orange")
-	lines(x = 1:nrow(fullData), y = fullData$slidingScaledPVT, pwd = 1, col = oaColors("green"))
+	lines(x = 1:nrow(fullData), y = fullData$slidingScaledPVT, lwd = 1, col = oaColors("green"))
 	
 	# SAR
 #	points(x = fullData$index, y = fullData$sar, pch = 19, cex = 0.5)
@@ -181,26 +194,43 @@ vizTradeAndStrategy <- function(data, dataList,
 	# add ADX plot
 	if(includeADX) {
 		
-		yRange <- par("usr")[3:4]
-		adxRange <- c(0, 50)
-		diRange <- range(c(fullData$DIn, fullData$DIp), na.rm = TRUE)
+		op <- par(no.readonly = TRUE) # the whole list of settable par's.
+		## do lots of plotting and par(.) calls, then reset:
 		
-		segments(x0 = 0, x1 = nrow(fullData), y0 = yRange[1] - 0.4 * diff(yRange))
-		segments(x0 = 0, x1 = nrow(fullData), y0 = yRange[1] - 0.3 * diff(yRange), 
-				col = gray(0.7))
-		segments(x0 = 0, x1 = nrow(fullData), y0 = yRange[1] - 0.32 * diff(yRange), 
-				col = gray(0.7))
-		text(x = 0, y = yRange[1] - 0.29 * diff(yRange), 
-				label = "ADX = 25", adj = c(0, 0), col = gray(0.7))
-		points(x = fullData$index, y = yRange[1] - 0.4 * diff(yRange)  + 
-						(fullData$DX / max(adxRange)) * 0.2 * diff(yRange), pch = 19)
-		lines(x = fullData$index, y = yRange[1] - 0.4 * diff(yRange)  + 
-						(fullData$DIp / max(diRange)) * 0.2 * diff(yRange), lwd = 1, col = oaColors("green"))
-		lines(x = fullData$index, y = yRange[1] - 0.4 * diff(yRange)  + 
-						(fullData$DIn / max(diRange)) * 0.2 * diff(yRange), lwd = 1, col = oaColors("red"))
+		par(mai = c(0, 0.117, 0, 0.125))
+		par(xaxs = "i")	
 		
+		
+		ylim = c(0, 1)
+		xlim = range(fullData$index-0.5)
+		
+		blankPlot(xlim = par("usr")[1:2], ylim = ylim)
+		lines(x = fullData$index, y = fullData$rsquared)
+		lines(x = fullData$index, y = fullData$choppiness, col = "blue")
+		
+		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 1)
+		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 0)
+		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 0.382)
+		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 0.9)
+		
+		addYlab(xlim = xlim, ylim = ylim)	
+		
+		par(op)
 	}
 	
+}
+
+
+addYlab <- function(xlim, ylim) {
+	
+	ygrid <- pretty(ylim)
+	ygrid <- ygrid[ygrid > min(ylim)]
+	ygrid <- ygrid[ygrid < max(ylim)]
+	segments(y0 = ygrid[1], y1 = ygrid[length(ygrid)], 
+			x0 = xlim[1] - 0.005 * diff(range(xlim)),  
+			lwd = 2)
+	text(x = xlim[1] - 0.01 * diff(range(xlim)),
+			y = ygrid, adj = c(1, 0.5), labels = ygrid, cex = 0.5)
 }
 
 

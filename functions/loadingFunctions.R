@@ -89,6 +89,41 @@ formatFullData <- function(input) {
 	fullData$MACD <- macdObj$macd
 	fullData$signal <- macdObj$signal
 	
+	# adjusted volume
+	fullData$volumeAdj <- fullData$Volume
+	fullData$cutoff <- rep(NA, nrow(fullData))
+	for(i in 6:nrow(fullData)) {
+		
+		fullData$cutoff[i] <- median(fullData$Volume[1:i]) + 3 * mad(fullData$Volume[1:i])
+		if(fullData$Volume[i] > fullData$cutoff[i])
+			fullData$volumeAdj[i] <- fullData$cutoff[i]
+		
+	}
+	
+	# rsquared
+	fullData$rsquared <- compute_r_squared_moving_window(fullData$Close,
+			window_size = 20)
+
+	# choppiness
+	fullData$choppiness <- compute_choppiness_index(fullData, period = 20)
+	
+	# volume smoothing
+	nSmooth = 14
+	fullData$volumeSmooth <- fullData$volumeAdj
+	volumeEMA <- EMA(fullData$volumeAdj, n = nSmooth)
+	fullData$volumeSmooth[nSmooth:nrow(fullData)] <- 
+			volumeEMA[nSmooth:nrow(fullData)]
+	
+#	plot(x = fullData$index, y = fullData$Volume, col = "white", 
+#			ylim = c(0, max(fullData$Volume)))
+#	rect(xleft = fullData$index - 0.5, xright = fullData$index + 0.5, 
+#			ybottom = 0, 
+#			ytop = fullData$Volume)
+#	lines(x = fullData$index, y = fullData$cutoff)
+#	lines(x = fullData$index, y = EMA(fullData$volumeAdj, n = 18), lwd = 2, 
+#			col = "blue")
+	
+	
 	# ADX
 	fullData <- cbind.data.frame(fullData, ADX(input, maType = "EMA", n = 15))
 	
@@ -97,18 +132,21 @@ formatFullData <- function(input) {
 	
 	# sliding PVT
 	fullData$slidingScaledPVT <- rep(NA, nrow(fullData))
-	for(i in 10:nrow(fullData)) {
+	fullData$avgVolume <- rep(NA, nrow(fullData))
+	for(i in 6:nrow(fullData)) {
 		# TODO need to find a real-time way of adjusting volume
-		pvt <- calcPVT(close = fullData$Close[1:i], volume = fullData$Volume[1:i]) 
+		pvt <- calcPVT(close = fullData$Close[1:i], volume = fullData$volumeAdj[1:i]) 
 		scaledPVT <- (pvt - min(pvt)) / diff(range(pvt))
 		scaledPVT <- min(fullData$Close[1:i]) + scaledPVT * abs(diff(range(fullData$Close[1:i])))
 		fullData$slidingScaledPVT[i] <- scaledPVT[i]
+		fullData$avgVolume[i] <- mean(fullData$Volume[1:i])
 	}
 	
 	# uniform PVT (PVT if volume was uniform), PVT, scaledPVT
-    unifVolume <- rep(mean(fullData$Volume), nrow(fullData))
-	fullData$pvt <- calcPVT(close = fullData$Close, volume = fullData$Volume)
-	fullData$unifPvt <- calcPVT(close = fullData$Close, volume = unifVolume)
+#    unifVolume <- rep(mean(fullData$Volume), nrow(fullData))
+	fullData$pvt <- fullData$unifPvt <- rep(NA, nrow(fullData))
+	fullData$pvt[-(1:5)] <- calcPVT(close = fullData$Close[-(1:5)], volume = fullData$volumeAdj[-(1:5)])
+	fullData$unifPvt[-(1:5)] <- calcPVT(close = fullData$Close[-(1:5)], volume = fullData$avgVolume[-(1:5)])
 	
 	# remove the weird last row
 	fullData <- fullData[-nrow(fullData), ]
