@@ -9,6 +9,10 @@ calcTradeEndTime <- function(tmpData, fullData, rowNum = 1,
 		stopLossMult, profitTakeMult) {
 	
 	matchedIdx <- which(fullData$time == tmpData$time[rowNum])
+	if(length(matchedIdx) == 0) {
+		timeDiffs <- abs(as.numeric(hms(fullData$time) - hms(tmpData$time[rowNum])))
+		matchedIdx <- which(timeDiffs == min(timeDiffs))[1]
+	}
 	
 	if(fullData$atr[matchedIdx] != 0) {
 		# BOT
@@ -188,34 +192,30 @@ calcTradeResult <- function(tmpData, fullData, rowNum = 1,
 
 calcPLStrategy <- function(data, plotNum, 
 		stopValues, profitTakes) {
+	
+	
 	tmpData <- data[which(data$plotNum == plotNum), ]
-	
-	from <- tmpData$day[1]
-	to <- ymd(from) + duration(1, "days")
+	tmpData$xValue <- rep(0, nrow(tmpData))
+	tmpData$tradeColor <- rep("", nrow(tmpData))
+	substr(tmpData$time, 7, 8) <- "00"
+	tmpData <- tmpData[1:2, ] # TODO fix this part
 	ticker <- tmpData$Symbol[1]
-	
-	x <- getSymbols(ticker, src="yahoo", 
-			periodicity = "1 minutes", 
-			from = from, to = to)
-	
-	# fill in missing values # TODO improve
-	idx <- which(is.na(get(x)[, 1]))
-	if(length(idx) > 0) {
-		for(jIdx in 1:length(idx)) {
-			
-			tmp <- get(x)
-			tmp[idx[jIdx], ] <- tmp[idx[jIdx] - 1, ]
-			assign(x,  value =  tmp)
-		}
-	}
+	from <- tmpData$day[1]
 	
 	# define the fullData object
-	fullData <- formatFullData(input = get(x))
+	rawIdx <- which(names(dataList) == paste0(ticker, " ", from))
+	rawData <- dataList[[rawIdx]]
+	fullData <- formatFullData(input = rawData)
 	
 	# match trade data index to fullData index
 	substr(tmpData$time, 7, 8) <- "00"
 	
+	# match the idx of the trade
 	matchedIdx <- which(fullData$time == tmpData$time[1])
+	if(length(matchedIdx) == 0) {
+		timeDiffs <- abs(as.numeric(hms(fullData$time) - hms(tmpData$time[1])))
+		matchedIdx <- which(timeDiffs == min(timeDiffs))[1]
+	}
 	
 	# define the profit-loss matrix
 	plMatrix <- matrix(0, nrow = length(stopValues), ncol = length(profitTakes))

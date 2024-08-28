@@ -9,10 +9,12 @@ library(dplyr)
 library(oaPlots)
 library(readxl)
 
-
 source("./functions/plotFunctions.R")
 source("./functions/loadingFunctions.R")
 source("./functions/calcFunctions.R")
+
+# source("loadFromYahoo.R")
+load("data1min.RData")
 
 ################# read in the data and preprocess #######################3
 # read data
@@ -20,15 +22,54 @@ source("./functions/calcFunctions.R")
 filename <- list.files("./data", pattern = "Stock Train")
 data <- as.data.frame(read_excel("./data/Stock Train Data.xlsx"))
 
-
-# reset the plot number 
+# remove the (for some reason corrupted) 2024-07-26 data
+data <- data[-which(data$Date == as.Date("2024-07-26")), ]
 data$plotNum <- 1:nrow(data)
+
 
 pdf("trains.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 3
-	vizTradeAndStrategy(data, plotNum = plotNum, 
+	vizTradeAndStrategy(data = data, dataList = dataList, 
+			plotNum = plotNum, 
 			omitTimepoints = c(1:10, 380:390), 
-			periodicity = "1 minutes", 
+			includeADX = TRUE, 
 			dataType = "train")
 }
 dev.off()
+
+
+pdf("trainHours.pdf", width = 10, height = 8)
+for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 3
+	for(jHour in 1:6) {
+	
+		if(jHour == 1) omit <- c(1:30, 90:390)
+		if(jHour == 2) omit <- c(1:90, 150:390)
+		if(jHour == 3) omit <- c(1:150, 210:390)
+		if(jHour == 4) omit <- c(1:210, 270:390)
+		if(jHour == 5) omit <- c(1:270, 330:390)
+		if(jHour == 6) omit <- c(1:330)
+		
+		vizTradeAndStrategy(data = data, dataList = dataList, 
+				plotNum = plotNum, 
+				omitTimepoints = omit, 
+				includeADX = TRUE, 
+				dataType = "train")
+		
+	}
+}
+dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -90,14 +90,29 @@ formatFullData <- function(input) {
 	fullData$signal <- macdObj$signal
 	
 	# ADX
-	fullData <- cbind.data.frame(fullData, ADX(input, maType = "EMA", n = 25))
+	fullData <- cbind.data.frame(fullData, ADX(input, maType = "EMA", n = 15))
 	
 	# Parabolic SAR
 	fullData$sar <- SAR(fullData[, c("High", "Low")], accel = c(0.01, 0.1))$sar
 	
+	# sliding PVT
+	fullData$slidingScaledPVT <- rep(NA, nrow(fullData))
+	for(i in 10:nrow(fullData)) {
+		# TODO need to find a real-time way of adjusting volume
+		pvt <- calcPVT(close = fullData$Close[1:i], volume = fullData$Volume[1:i]) 
+		scaledPVT <- (pvt - min(pvt)) / diff(range(pvt))
+		scaledPVT <- min(fullData$Close[1:i]) + scaledPVT * abs(diff(range(fullData$Close[1:i])))
+		fullData$slidingScaledPVT[i] <- scaledPVT[i]
+	}
+	
+	# uniform PVT (PVT if volume was uniform), PVT, scaledPVT
+    unifVolume <- rep(mean(fullData$Volume), nrow(fullData))
+	fullData$pvt <- calcPVT(close = fullData$Close, volume = fullData$Volume)
+	fullData$unifPvt <- calcPVT(close = fullData$Close, volume = unifVolume)
+	
 	# remove the weird last row
-	# TODO look into improving
 	fullData <- fullData[-nrow(fullData), ]
+
 	
 	return(fullData)
 }

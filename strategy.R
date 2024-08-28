@@ -13,6 +13,10 @@ source("./functions/plotFunctions.R")
 source("./functions/loadingFunctions.R")
 source("./functions/calcFunctions.R")
 
+# source("loadFromYahoo.R")
+#load("data1min.RData")
+load("data2min.RData")
+
 ################# read in the data and preprocess #######################3
 # read data
 
@@ -36,48 +40,51 @@ for(i in 1:length(remTickers)) {
 data$plotNum <- as.numeric(as.factor(data$plotNum))
 
 pdf("selectedTrades.pdf", width = 10, height = 8)
-for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 2
-#for(plotNum in 30:40) {
-	vizTradeAndStrategy(data, plotNum = plotNum, 
-			stopLossMult = 4, profitTakeMult = 3.5, 
-			omitTimepoints = c(1:10, 380:390), 
+for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 1
+	vizTradeAndStrategy(data = data, dataList = dataList, 
+			plotNum = plotNum, 
+			stopLossMult = 2.5, profitTakeMult = 2.5, 
+			omitTimepoints = c(1:5, 191:195), 
 			includeADX = TRUE, 
-			periodicity = "1 minutes", 
 			dataType = "normal")
 }
 dev.off()
 
+
+
 pdf("singleTrades.pdf", width = 10, height = 8)
-for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 1
-	vizSingleTrade(data, plotNum = plotNum, 
-			stopLossMult = 4, profitTakeMult = 3.5, minutesBefore = 90)
+for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
+	vizTradeAndStrategy(data = data, dataList = dataList, 
+			plotNum = plotNum, 
+			stopLossMult = 2.5, profitTakeMult = 2.5, 
+			timepointsBefore = 60, ending = "tradeEnd")
 }
 dev.off()
 
 
 
-# rsquared exploration
-statData <- data %>%
-		group_by(Symbol, day) %>%
-		slice(1) %>%
-		ungroup() %>%
-		as.data.frame()
-
-statOut <- computeStats(data = statData, 
-		stopLossMult = 4, profitTakeMult = 3.5, 
-		minutesBefore = 90) 
-mean(statOut$tradeResult)
-
-tmp <- statOut[which(statOut$tradeResult == 1), ]
-mean(tmp$rsquared)
-
-tmp <- statOut[which(statOut$tradeResult == 0), ]
-mean(tmp$rsquared)
-
-tmp <- statOut[which(statOut$rsquared > 0.8), ]
-mean(tmp$tradeResult)
+pdf("tradeSetups.pdf", width = 10, height = 8)
+for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
+	vizSingleTrade(data = data, dataList = dataList, 
+			plotNum = plotNum, 
+			stopLossMult = 2.5, profitTakeMult = 2.5, 
+			minutesBefore = 60, ending = "tradeStart")
+}
+dev.off()
 
 
+pdf("progressiveStops.pdf", width = 10, height = 8)
+plotNum <- 17
+for(numTimepoints in seq(10, 100, by = 2)) {
+	omit <- numTimepoints
+	vizTradeAndStrategy(data = data, dataList = dataList, 
+			plotNum = plotNum, 
+			stopLossMult = 4, profitTakeMult = 3.5, 
+			omitTimepoints = c(numTimepoints:195), 
+			includeADX = TRUE, 
+			dataType = "normal")
+}
+dev.off()
 
 
 # broad stop loss exploration
@@ -115,3 +122,64 @@ std_matrix <- apply(simplify2array(plList), c(1, 2), sd)
 se_matrix <- std_matrix / sqrt(length(plList))
 propEdge / se_matrix   # z values
 
+
+
+
+
+
+
+
+
+
+#######################
+# remove bad entries  #
+remTickers <- c("PLTR", "DNUT", "UAA", "HD", "KEY",
+		"SBUX", "SE", "CAH", "GOOG", "K",
+		"PGR", "HRB", "AMD", "EBS", "MCD",
+		"RDFN", "ZIM", "AMD", "COIN", "FN")
+remDates <- c("2024-08-06", "2024-08-08", "2024-08-08", "2024-08-12", "2024-08-12", 
+		"2024-08-13", "2024-08-13", "2024-08-14", "2024-08-14", "2024-08-14", 
+		"2024-08-14", "2024-08-16", "2024-08-19", "2024-08-19", "2024-08-19",
+		"2024-08-19", "2024-08-19", "2024-08-20", "2024-08-20", "2024-08-20")
+dataNoBadEntries <- data
+
+for(i in 1:length(remTickers)) {
+	idxRem <- which(dataNoBadEntries$Symbol == remTickers[i] 
+					& dataNoBadEntries$day == remDates[i])
+	if(length(idxRem) > 0)
+		dataNoBadEntries <- dataNoBadEntries[-idxRem, ]
+}
+
+dataNoBadEntries$plotNum <- as.numeric(as.factor(dataNoBadEntries$plotNum))
+
+
+
+# focused stop loss exploration
+stopValues <- seq(2, 3, by = 0.1)
+profitTakes <- seq(2, 3, by = 0.1)
+plList <- list()
+
+for(plotNum in 1:max(dataNoBadEntries$plotNum)) {  # plotNum <- 1
+	plList[[plotNum]] <- calcPLStrategy(dataNoBadEntries, plotNum = plotNum, 
+			stopValues = stopValues, profitTakes = profitTakes)
+}
+
+sum_matrix <- Reduce(`+`, plList)
+propEdge <- round(sum_matrix/length(plList), 4)
+round(propEdge, 4)  # proportion profit per trade. 0.01 = 1% edge
+
+std_matrix <- apply(simplify2array(plList), c(1, 2), sd)
+se_matrix <- std_matrix / sqrt(length(plList))
+round(propEdge / se_matrix, 2)   # z values
+
+
+pdf("selectedGoodTrades.pdf", width = 10, height = 8)
+for(plotNum in 1:max(dataNoBadEntries$plotNum)) {  # plotNum <- 1
+	vizTradeAndStrategy(data = dataNoBadEntries, dataList = dataList, 
+			plotNum = plotNum, 
+			stopLossMult = 2.5, profitTakeMult = 2.5, 
+			omitTimepoints = c(1:5, 191:195), 
+			includeADX = TRUE, 
+			dataType = "normal")
+}
+dev.off()
