@@ -103,7 +103,7 @@ formatFullData <- function(input) {
 	# rsquared
 	fullData$rsquared <- compute_r_squared_moving_window(fullData$Close,
 			window_size = 20)
-
+	
 	# choppiness
 	fullData$choppiness <- compute_choppiness_index(fullData, period = 20)
 	

@@ -18,7 +18,7 @@ startFromScratch <- FALSE
 if(startFromScratch) {
 	dataList <- list()
 } else {
-	load("data2min.RData")
+	load("./data/data2min.RData")
 }
 
 periodicity <- "2 minutes" # TODO think about this
@@ -133,7 +133,7 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 }
 
 
-save(dataList, file = "data2min.RData")
+save(dataList, file = "./data/data2min.RData")
 
 
 

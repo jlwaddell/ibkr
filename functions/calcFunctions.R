@@ -357,3 +357,28 @@ compute_choppiness_index <- function(fullData, period = 14) {
 	# Return the computed Choppiness Index
 	return(choppiness_index/100)
 }
+
+
+# Function to compute the number of consecutive TRUE values
+count_consecutive_true <- function(x) {
+	# Initialize a vector to store the counts
+	count_vector <- integer(length(x))
+	
+	# Initialize the counter
+	counter <- 0
+	
+	# Loop through the vector
+	for (i in seq_along(x)) {
+		if (x[i]) {
+			# Increment the counter if the value is TRUE
+			counter <- counter + 1
+		} else {
+			# Reset the counter if the value is FALSE
+			counter <- 0
+		}
+		# Store the count
+		count_vector[i] <- counter
+	}
+	
+	return(count_vector)
+}

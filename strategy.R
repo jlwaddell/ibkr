@@ -15,7 +15,7 @@ source("./functions/calcFunctions.R")
 
 # source("loadFromYahoo.R")
 #load("data1min.RData")
-load("data2min.RData")
+load("./data/data2min.RData")
 
 ################# read in the data and preprocess #######################3
 # read data
@@ -39,7 +39,7 @@ for(i in 1:length(remTickers)) {
 # reset the plot number 
 data$plotNum <- as.numeric(as.factor(data$plotNum))
 
-pdf("selectedTrades.pdf", width = 10, height = 8)
+pdf("./plots/selectedTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 10
 	vizTradeAndStrategy(data = data, dataList = dataList, 
 			plotNum = plotNum, 
@@ -52,7 +52,7 @@ dev.off()
 
 
 
-pdf("singleTrades.pdf", width = 10, height = 8)
+pdf("./plots/singleTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
 	vizTradeAndStrategy(data = data, dataList = dataList, 
 			plotNum = plotNum, 
@@ -63,7 +63,7 @@ dev.off()
 
 
 
-pdf("tradeSetups.pdf", width = 10, height = 8)
+pdf("./plots/tradeSetups.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
 	vizTradeAndStrategy(data = data, dataList = dataList, 
 			plotNum = plotNum, 
@@ -74,7 +74,7 @@ for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
 dev.off()
 
 
-pdf("progressiveStops.pdf", width = 10, height = 8)
+pdf("./plots/progressiveStops.pdf", width = 10, height = 8)
 plotNum <- 17
 for(numTimepoints in seq(10, 100, by = 2)) {
 	omit <- numTimepoints
@@ -174,7 +174,7 @@ se_matrix <- std_matrix / sqrt(length(plList))
 round(propEdge / se_matrix, 2)   # z values
 
 
-pdf("selectedGoodTrades.pdf", width = 10, height = 8)
+pdf("./plots/selectedGoodTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(dataNoBadEntries$plotNum)) {  # plotNum <- 1
 	vizTradeAndStrategy(data = dataNoBadEntries, dataList = dataList, 
 			plotNum = plotNum, 
