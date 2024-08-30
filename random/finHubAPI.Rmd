@@ -1,0 +1,622 @@
+---
+title: "finHub API"
+output:
+  html_document:
+    df_print: paged
+geometry: margin=1cm
+date: '`r format(Sys.Date(), "%A, %B %d, %Y")`'
+---
+
+```{=html}
+<style>
+body {
+    position: absolute;
+    left: 0px;}
+</style>
+```
+
+
+```{r setup, include=FALSE}
+require("httr");require("data.table");require("dplyr");require("quantmod")
+require("DT")
+# get API Key
+# https://finnhub.io/dashboard
+# Reference URLS: (rate limits are currently set to 30/requests per second)
+# https://finnhub.io/docs/api/rate-limit
+
+# environment to store apiKey
+pw <- new.env()
+# insert your API KEY:
+assign("apiKey", "cr8n5r1r01qmmifqslsgcr8n5r1r01qmmifqslt0", envir = pw)
+```
+
+## Getting Simple Quotes
+
+Reference: <https://finnhub.io/docs/api/quote>
+
+`stk` = stock symbol
+
+`apiKey` = your api key
+
+```{r simpleQuotes, echo=FALSE}
+
+# build wrapper for simple quotes
+getQuoteFH = function(stk,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/quote?symbol=",stk,"&token=",apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  qte <- httr::content(pg) %>% suppressWarnings()
+  # convert to data frame
+  qte <- as.data.frame(do.call(cbind,qte))
+  # change column names
+  colnames(qte) <- c("curPRC","change","pctChange","high","low","open","prevClose","timeStamp")
+  # format timestamp - set to Eastern Time
+  qte$timeStamp <- as.POSIXct(qte$timeStamp,origin = "1970-01-01",tz = "America/New_York")
+  # add stock symbol as column
+  qte$symbol <- stk
+  # return data
+  qte
+}
+# test function
+OUT = getQuoteFH(stk="TSLA", apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+
+```
+
+## Stock Candles (OHLCV)
+
+Reference: <https://finnhub.io/docs/api/stock-candles>
+
+`stk` = stock symbol
+
+`res` = resolution; accepted values: 1, 5, 15, 30, 60, D, W, M
+
+`from` = character date; ex: "2023-01-01"
+
+`to` = character date; ex: "2023-06-30" - defaults to current date
+
+`apiKey` = your api key
+
+```{r candleData, echo=FALSE}
+
+# build wrapper for OHLCV data
+getStkCandlesFH = function(stk,res,from,to=Sys.Date(),apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/stock/candle?symbol=",stk,"&resolution=",res,"&from=",
+                as.numeric(as.POSIXct(from)),"&to=",as.numeric(as.POSIXct(to)),"&token=", apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # convert to data frame
+  df <- as.data.frame(do.call(cbind, df))
+  # re-order columns
+  df <- df[,c("t","o","h","l","c","v")]
+  # change column names
+  colnames(df) <- c("timeStamp","open","high","low","close","volume")
+  # change column class
+  df$timeStamp <- sapply(df$timeStamp, as.numeric)
+  df$open      <- sapply(df$open, as.numeric)
+  df$high      <- sapply(df$high, as.numeric)
+  df$low       <- sapply(df$low, as.numeric)
+  df$close     <- sapply(df$close, as.numeric)
+  df$volume    <- sapply(df$volume, as.numeric)
+  # format timestamp - set to Eastern Time
+  df$timeStamp <- as.POSIXct(df$timeStamp,origin = "1970-01-01",tz = "America/New_York")
+  # add stock symbol as column
+  df$symbol <- stk
+  # return data
+  df
+}
+
+out <- getStkCandlesFH(stk=ticker, res=1, from=from, to = to, apiKey = pw$apiKey)
+
+# test function
+OUT = getStkCandlesFH(stk="SPY", res=1, from="2023-01-01", to = Sys.Date(), apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+
+```
+
+
+## Crypto Candles (OHLCV)
+
+Reference: <https://finnhub.io/docs/api/crypto-candles>
+
+`crypto` = crypto symbol
+
+`res` = resolution; accepted values: 1, 5, 15, 30, 60, D, W, M
+
+`from` = character date; ex: "2023-01-01"
+
+`to` = character date; ex: "2023-06-30" - defaults to current date
+
+`apiKey` = your api key
+
+```{r cryptoCandleData, echo=FALSE}
+
+# build wrapper for crypto OHLCV data
+getCryptoCandlesFH = function(crypto,res,from,to=Sys.Date(),apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/crypto/candle?symbol=BINANCE:",crypto,"&resolution=",res,"&from=",
+                as.numeric(as.POSIXct(from)),"&to=",as.numeric(as.POSIXct(to)),"&token=",apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # convert to data frame
+  df <- as.data.frame(do.call(cbind,df))
+  # re-order columns
+  df <- df[,c("t","o","h","l","c","v")]
+  # change column names
+  colnames(df) <- c("timeStamp","open","high","low","close","volume")
+  # change column class
+  df$timeStamp <- sapply(df$timeStamp, as.numeric)
+  df$open      <- sapply(df$open, as.numeric)
+  df$high      <- sapply(df$high, as.numeric)
+  df$low       <- sapply(df$low, as.numeric)
+  df$close     <- sapply(df$close, as.numeric)
+  df$volume    <- sapply(df$volume, as.numeric)
+  # format timestamp - set to Eastern Time
+  df$timeStamp <- as.POSIXct(df$timeStamp,origin = "1970-01-01",tz = "America/New_York")
+  # add crypto symbol as column
+  df$symbol <- crypto
+  # return data
+  df
+}
+# test function
+OUT = getCryptoCandlesFH(crypto="ETHUSDT",res='D', from="2023-01-01", to = Sys.Date(), apiKey = pw$apiKey)
+# chart candle data
+chartSeries(xts(OUT[,c(2:6)], order.by = as.Date(OUT$timeStamp,tz = "America/New_York")),name = OUT$symbol[1])
+
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+## Social Sentiment For Stocks From Reddit/Twitter
+
+Reference: <https://finnhub.io/docs/api/social-sentiment>
+
+`stk` = stock symbol
+
+`apiKey` = your api key
+
+`from` = [OPTIONAL] character date; ex: "2023-01-01"
+
+`to` = [OPTIONAL] character date; ex: "2023-06-30" 
+
+```{r socialSent, echo=FALSE}
+
+# build wrapper for social sentiment - reddit/twitter
+getSocialSentFH = function(stk,apiKey,from=NULL,to=NULL){
+  # create url
+  if(is.null(from) & is.null(to)){
+  url <- paste0("https://finnhub.io/api/v1/stock/social-sentiment?symbol=",stk,"&token=",apiKey)
+  }else{
+    url <- paste0("https://finnhub.io/api/v1/stock/social-sentiment?symbol=",stk,"&from=",
+                as.numeric(as.POSIXct(from)),"&to=",as.numeric(as.POSIXct(to)),"&token=",apiKey)
+  }
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  if(length(df$reddit) > 0){
+    # convert to data frame
+    reddit <- as.data.frame(do.call(rbind,df$reddit))
+    reddit$source <- "reddit"
+    reddit$symbol <-  stk
+  }else{
+    reddit <- NULL
+  }
+  if(length(df$twitter) > 0){
+    # convert to data frame
+    twitter <- as.data.frame(do.call(rbind,df$twitter))
+    twitter$source <- "twitter"
+    twitter$symbol <-  stk
+  }else{
+    twitter <- NULL
+  }
+  # row bind results
+  res = rbind(reddit,twitter)
+  # return data
+  res
+}
+# test function
+OUT = getSocialSentFH(stk="TSLA", apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Earnings Calendar
+
+Reference: <https://finnhub.io/docs/api/earnings-calendar>
+
+`from` = [OPTIONAL] character date; ex: "2023-01-01"
+
+`to` = [OPTIONAL] character date; ex: "2023-06-30" 
+
+`stk` = [OPTIONAL] stock symbol
+
+`international` = [OPTIONAL] Set to true to include international markets. Default value is false
+
+`apiKey` = your api key
+
+```{r earningsCal, echo=FALSE}
+
+# build wrapper for Earnings Calendar
+getEarningsCalFH = function(apiKey,from=NULL,to=NULL,stk=NULL,international=NULL){
+  # create url
+  if(is.null(from) & is.null(to) & is.null(stk) & is.null(international)){
+  url <- paste0("https://finnhub.io/api/v1/calendar/earnings?&token=",apiKey)
+  }else{
+    url <- paste0("https://finnhub.io/api/v1/calendar/earnings?symbol=",stk,"&from=",
+                as.numeric(as.POSIXct(from)),"&to=",as.numeric(as.POSIXct(to)),"&international=",
+                international,"&token=",apiKey)
+  }
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # row bind results
+  res = as.data.frame(rbindlist(df$earningsCalendar,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getEarningsCalFH(apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Earnings Surprises
+
+Reference: <https://finnhub.io/docs/api/company-earnings>
+
+`from` = [OPTIONAL] character date; ex: "2023-01-01"
+
+`to` = [OPTIONAL] character date; ex: "2023-06-30" 
+
+`stk` = [OPTIONAL] stock symbol
+
+`international` = [OPTIONAL] Set to true to include international markets. Default value is false
+
+`apiKey` = your api key
+
+Free Tier: Last 4 quarters
+```{r earningsSurprises, echo=FALSE}
+
+# build wrapper for Earnings Surprises
+getEarningsSuprisesFH = function(stk,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/stock/earnings?symbol=",stk,"&token=",apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # row bind results
+  res = as.data.frame(rbindlist(df,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getEarningsSuprisesFH(stk="AMZN",apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+## IPO Calendar
+
+Reference: <https://finnhub.io/docs/api/ipo-calendar>
+
+`from` = character date; ex: "2023-01-01"
+
+`to` =  character date; ex: "2023-06-30" 
+
+`apiKey` = your api key
+
+Free Tier: Last 4 quarters
+```{r ipoCal, echo=FALSE}
+
+# build wrapper for IPO Calendar
+getIPOCalFH = function(from,to,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1//calendar/ipo?from=",from,"&to=",to,"&token=",apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # row bind results
+  res = as.data.frame(rbindlist(df$ipoCalendar,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getIPOCalFH(from="2023-01-01",to=Sys.Date()+30,apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Financials As Reported
+
+Reference: <https://finnhub.io/docs/api/financials-reported>
+
+`stk` = [OPTIONAL] stock symbol
+
+`cik` = [OPTIONAL] stock CIK code
+
+`accessNumber` = [OPTIONAL] Access number of a specific report you want to retrieve financials from.
+
+`freq` = [OPTIONAL] Frequency. Can be either annual or quarterly. Default to annual.
+
+`from` = [OPTIONAL] character date; ex: "2023-01-01"
+
+`to` =  [OPTIONAL] character date; ex: "2023-06-30" 
+
+`apiKey` = your api key
+
+Free Tier: Last 4 quarters
+```{r finAsReported, echo=FALSE}
+
+# build wrapper for SEC Financials data
+getFinancialsFH = function(stk,cik=NULL,accessNumber=NULL,freq,from=NULL,to=NULL,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/stock/financials-reported?symbol=",stk,"&freq=",freq,"&token=",apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # row bind results
+  RES = lapply(as.list(1:length(df$data)), function(ii){
+    #cat("\n",ii)
+    # current filing
+    tmp = df$data[[ii]]
+    #  balance sheet
+    BS <- as.data.frame(rbindlist(tmp$report$bs, use.names = TRUE, fill = TRUE))
+    BS$rep <- "balanceSheet"
+    # income statement
+    IS <- as.data.frame(rbindlist(tmp$report$ic,use.names = TRUE, fill = TRUE))
+    IS$rep <- "incomeStatement"
+    # cash flow statement
+    CF <- as.data.frame(rbindlist(tmp$report$cf, use.names = TRUE, fill = TRUE))
+    CF$rep <- "cashFlowStatement"
+    # row bind all reports
+    ALL <- as.data.frame(rbind(BS,IS,CF))
+    # add report details
+    ALL$accNum <- tmp$accessNumber
+    ALL$symbol <- tmp$symbol
+    ALL$cik <- tmp$cik
+    ALL$year <- tmp$year
+    ALL$quarter <- tmp$quarter
+    ALL$form <- tmp$form
+    ALL$startDate <- tmp$startDate
+    ALL$endDate <- tmp$endDate
+    ALL$filedDate <- tmp$filedDate
+    ALL$acceptedDate <- tmp$acceptedDate
+    # make sure it is data frame
+    as.data.frame(ALL)
+  })
+  res = as.data.frame(rbindlist(RES,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getFinancialsFH(stk="SPCE",freq="quarterly",apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+## Insider Sentiment
+
+Reference: <https://finnhub.io/docs/api/insider-sentiment>
+
+`stk` = stock symbol
+
+`from` = character date; ex: "2023-01-01"
+
+`to` = character date; ex: "2023-06-30" 
+
+`apiKey` = your api key
+
+The MSPR ranges from -100 for the most negative to 100 for the most positive which can signal price changes in the coming 30-90 days.
+```{r insiderSentiment, echo=FALSE}
+
+# build wrapper for Insider Sentiment data
+getInsiderSentimentFH = function(stk,from,to,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/stock/insider-sentiment?symbol=",stk,"&from=",from,"&to=",to,"&token=",apiKey)
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # row bind results
+  res = as.data.frame(rbindlist(df$data,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getInsiderSentimentFH(stk="GOOGL",from="2022-12-01",to=Sys.Date()+60,apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Insider Transactions
+
+Reference: <https://finnhub.io/docs/api/insider-transactions>
+
+`stk` = stock symbol
+
+`from` = [OPTIONAL] character date; ex: "2023-01-01"
+
+`to` = [OPTIONAL] character date; ex: "2023-06-30" 
+
+`apiKey` = your api key
+
+Company insider transactions data sourced from Form 3,4,5, SEDI and relevant companies' filings. This endpoint covers US, Canada, Australia, and selected EU companies. Limit to 100 transactions per API call.
+```{r insiderTransactions, echo=FALSE}
+
+# build wrapper for Insider Transactions
+getInsiderTransactionstFH = function(stk,apiKey,from=NULL,to=NULL){
+  # create url
+  if(is.null(from) & is.null(to)){
+  url <- paste0("https://finnhub.io/api/v1/stock/insider-sentiment?symbol=",stk,"&token=",apiKey)  
+  }else{
+    url <- paste0("https://finnhub.io/api/v1/stock/insider-transactions?symbol=",stk,"&from=",from,"&to=",to,"&token=",apiKey)
+  }
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # row bind results
+  res = as.data.frame(rbindlist(df$data,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getInsiderTransactionstFH(stk="AMZN", apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Basic Financials
+
+Reference: <https://finnhub.io/docs/api/company-basic-financials>
+
+`stk` = stock symbol
+
+`metric` = Metric type. Can be 1 of the following values all
+
+`apiKey` = your api key
+
+Get company basic financials such as margin, P/E ratio, 52-week high/low etc.
+```{r basicFinancials, echo=FALSE}
+
+# build wrapper for Basic Financials - Fundamental Ratios
+getBasicFinancialsFH = function(stk,apiKey,metric){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1//stock/metric?symbol=",stk,"&metric=",metric,"&token=",apiKey)  
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+  # most recent
+  recent_metrics <- as.data.frame(do.call(rbind,df[["metric"]]))
+  recent_metrics <- data.frame(period = as.character(Sys.Date()), v=recent_metrics$V1, type=rownames(recent_metrics), series="mostRecent")
+  # ***************************************************************************************************************************
+  # annual metrics
+  annual_names <- names(df$series$annual[lapply(df$series$annual,length)>0])
+  # get all annual metric
+  annual_metrics = do.call(rbind,lapply(as.list(annual_names), function(x){
+    # extract data
+    tmp <- as.data.frame(do.call(rbind,df$series$annual[[x]]))
+    # assign metric type
+    tmp$type = x
+    # assign series type
+    tmp$series = "annual"
+    # return data
+    tmp
+  })) %>% as.data.frame
+  # ***************************************************************************************************************************
+  # quarterly metrics
+  quart_names <- names(df$series$quarterly[lapply(df$series$quarterly,length)>0])
+  # get all quarterly metric
+  quart_metrics = do.call(rbind,lapply(as.list(quart_names), function(x){
+    # extract data
+    tmp <- as.data.frame(do.call(rbind,df$series$quarterly[[x]]))
+    # assign metric type
+    tmp$type = x
+    # assign series type
+    tmp$series = "quarterly"
+    # return data
+    tmp
+  })) %>% as.data.frame
+  # ***************************************************************************************************************************
+  # row bind all
+  res <- as.data.frame(rbind(recent_metrics, quart_metrics, annual_metrics))
+  # reclass
+  res$period <- sapply(res$period, as.character)
+  res$v <- sapply(res$v, as.numeric)
+  res$type <- sapply(res$type, as.character)
+  res$series <- sapply(res$series, as.character)
+  # return data
+  res
+}
+# test function
+OUT = getBasicFinancialsFH(stk="AMZN", apiKey = pw$apiKey, metric = "all")
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Company News
+
+Reference: <https://finnhub.io/docs/api/company-news>
+
+`stk` = stock symbol
+
+`from` = character date; ex: "2023-01-01"
+
+`to` = character date; ex: "2023-06-30" 
+
+`apiKey` = your api key
+
+Free Tier: 1 year of historical news and new updates
+```{r companyNews, echo=FALSE}
+
+# build wrapper for Company News
+getCompanyNewsFH = function(stk,from,to,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/company-news?symbol=",stk,"&from=",from,"&to=",to,"&token=",apiKey)  
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+   # row bind results
+  res = as.data.frame(rbindlist(df,use.names = TRUE, fill = TRUE)) %>% suppressWarnings()
+  # fix timestamps
+  res$datetime <- as.POSIXct(res$datetime,origin="1970-01-01",tz="America/New_York")
+  # return data
+  res
+}
+# test function
+OUT = getCompanyNewsFH(stk="ORCL", apiKey = pw$apiKey,from="2023-01-01",to=Sys.Date())
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```
+
+
+## Company Profile 2
+
+Reference: <https://finnhub.io/docs/api/company-profile2>
+
+`stk` = stock symbol
+
+`apiKey` = your api key
+
+```{r companyProfile, echo=FALSE}
+
+# build wrapper for Company Profile
+getCompanyProfileFH = function(stk,apiKey){
+  # create url
+  url <- paste0("https://finnhub.io/api/v1/stock/profile2?symbol=",stk,"&token=",apiKey)  
+  # get request
+  pg <- GET(url)
+  # extract content
+  df <- httr::content(pg) %>% suppressWarnings()
+   # row bind results
+  res = as.data.frame(do.call(cbind,df)) %>% suppressWarnings()
+  # return data
+  res
+}
+# test function
+OUT = getCompanyProfileFH(stk="META", apiKey = pw$apiKey)
+# OUTPUT
+DT::datatable(OUT,rownames = FALSE,extensions = "Buttons", options = list(dom="Blfrtip", buttons = c('copy', 'csv', 'excel')))
+```

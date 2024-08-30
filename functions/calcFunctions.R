@@ -1,8 +1,3 @@
-# TODO: Add comment
-# 
-# Author: Jason
-###############################################################################
-
 
 
 calcTradeEndTime <- function(tmpData, fullData, rowNum = 1, 
@@ -381,4 +376,35 @@ count_consecutive_true <- function(x) {
 	}
 	
 	return(count_vector)
+}
+
+
+convert_to_2min <- function(dayData) {
+	# Check if the input data frame has the necessary columns
+	if (!all(c("Open", "High", "Low", "Close", "Volume") %in% colnames(dayData))) {
+		stop("Data frame must have columns: Open, High, Low, Close, and Volume")
+	}
+	
+	origRownames <- rownames(dayData)
+	endRownames <- origRownames[which((1:length(origRownames) %% 2) == 1)]
+	
+	# Use dplyr to group every two rows
+	data_2min <- dayData %>%
+			mutate(group = rep(1:(n()/2), each = 2, length.out = n())) %>%
+			group_by(group) %>%
+			summarise(
+					Open = first(Open),                  # Open price of the first row in the group
+					High = max(High),                    # Max high price in the group
+					Low = min(Low),                      # Min low price in the group
+					Close = last(Close),                 # Close price of the last row in the group
+					Volume = sum(Volume, na.rm = TRUE)   # Sum of volume in the group
+			) %>%
+			ungroup() %>%
+			select(-group)  # Remove the temporary group column
+	
+	data_2min <- as.data.frame(data_2min)
+	rownames(data_2min) <- endRownames
+	
+	
+	return(data_2min)
 }

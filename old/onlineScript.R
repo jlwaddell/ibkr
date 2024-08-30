@@ -3,22 +3,22 @@
 # 01/16/2020 11:14 PM gets historical quotes for specified symbols at various frequencies
 .proctime00 = proc.time()
 library(IBrokers)
-tws <- twsConnect()
+tws <- twsConnect(port = 7497)
 print.contract.details = TRUE
 get.mkt.data <- FALSE
 get.hist.data <- FALSE
 get.intraday.data <- TRUE
 tws <- twsConnect()
-symbols <- c("SPY","TLT")
+symbols <- c("AAPL")
 nsym <- length(symbols)
 # set the intervals for which data should be downloaded to TRUE
 one.min <- FALSE
-two.min <- FALSE
+two.min <- TRUE
 three.min <- FALSE
 five.min <- FALSE
 fifteen.min <- FALSE
 thirty.min <- FALSE
-hourly <- TRUE
+hourly <- FALSE
 if (get.mkt.data) print(reqMktData(tws, twsEquity(symbols[1])))
 for (sym in symbols) {  # sym = "SPY"
 	contract <- twsEquity(sym,'SMART','ISLAND')
