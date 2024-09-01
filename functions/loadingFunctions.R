@@ -86,8 +86,8 @@ formatFullData <- function(input) {
 	# MACD
 	macdObj <- MACD(x = Cl(input), maType = "EMA", percent = TRUE, 
 			nFast = 6, nSlow = 13, nSig = 3) # TODO explore other numbers
-	fullData$MACD <- macdObj$macd
-	fullData$signal <- macdObj$signal
+	fullData$MACD <- macdObj[, "macd"]  # macdObj$macd
+	fullData$signal <- macdObj[, "signal"]  # macdObj$signal
 	
 	# adjusted volume
 	fullData$volumeAdj <- fullData$Volume
@@ -103,9 +103,17 @@ formatFullData <- function(input) {
 	# rsquared
 	fullData$rsquared <- compute_r_squared_moving_window(fullData$Close,
 			window_size = 20)
+	fullData$rsquared30 <- compute_r_squared_moving_window(fullData$Close,
+			window_size = 30)
+	
+	# still monotonic
+	fullData$stillMonotonic <- still_monotonic(close_values = fullData$Close, 
+			lookback = 25)
 	
 	# choppiness
 	fullData$choppiness <- compute_choppiness_index(fullData, period = 20)
+	fullData$choppiness30 <- compute_choppiness_index(fullData, period = 30)
+	
 	
 	# volume smoothing
 	nSmooth = 14
@@ -125,7 +133,7 @@ formatFullData <- function(input) {
 	
 	
 	# ADX
-	fullData <- cbind.data.frame(fullData, ADX(input, maType = "EMA", n = 15))
+#	fullData <- cbind.data.frame(fullData, ADX(input, maType = "EMA", n = 15))  
 	
 	# Parabolic SAR
 	fullData$sar <- SAR(fullData[, c("High", "Low")], accel = c(0.01, 0.1))$sar

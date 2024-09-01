@@ -85,6 +85,9 @@ vizTradeAndStrategy <- function(data, dataList,
 #		, ", Profit = ", round(sum(tmpData$Realized.P.L), 2) 
 	}
 	
+	if(class(rawData)[1] == "data.frame")
+		rawData <- as.xts(rawData)
+	
 	# define the base chart
 	myChart <- chart_Series(rawData[startIdx:endIdx, ], name = plotTitle)
 	print(myChart)
@@ -139,6 +142,18 @@ vizTradeAndStrategy <- function(data, dataList,
 			# plot profit/loss rectangles
 			if(tmpData$Quantity[kTmp] > 0 & (kTmp %% 2) == 1) {
 				
+				if(matchedIdx > 30) {
+					bestSupport <- calcSupportLine(fullData, type = "rising")
+					
+					if(nrow(bestSupport) > 0) {
+						segments(x0 = matchedIdx - 25, x1 = matchedIdx, 
+								y0 = bestSupport$intercept + bestSupport$slope * (matchedIdx - 25), 
+								y1 = bestSupport$intercept + bestSupport$slope * (matchedIdx), 
+								lwd = 2)
+					}
+				}
+				
+				
 				rect(xleft = tmpData$xValue[kTmp], 
 						xright = xright, 
 						ybottom = tmpData$T..Price[kTmp], 
@@ -151,6 +166,18 @@ vizTradeAndStrategy <- function(data, dataList,
 						col = oaColors("green", alpha = 0.3), border = NA)
 				
 			} else if(tmpData$Quantity[kTmp] < 0 & (kTmp %% 2) == 1) {
+				
+				if(matchedIdx > 30) {
+					bestSupport <- calcSupportLine(fullData, type = "falling")
+					
+					if(nrow(bestSupport) > 0) {
+						segments(x0 = matchedIdx - 25, x1 = matchedIdx, 
+								y0 = bestSupport$intercept + bestSupport$slope * (matchedIdx - 25), 
+								y1 = bestSupport$intercept + bestSupport$slope * (matchedIdx), 
+								lwd = 2)
+					}
+				}
+				
 				rect(xleft = tmpData$xValue[kTmp], 
 						xright = xright, 
 						ybottom = tmpData$T..Price[kTmp], 
@@ -206,7 +233,9 @@ vizTradeAndStrategy <- function(data, dataList,
 		
 		blankPlot(xlim = par("usr")[1:2], ylim = ylim)
 		lines(x = fullData$index, y = fullData$rsquared)
+		lines(x = fullData$index, y = fullData$rsquared30, col = gray(0.9))
 		lines(x = fullData$index, y = fullData$choppiness, col = "blue")
+		lines(x = fullData$index, y = fullData$choppiness30, col = "purple")
 		
 		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 1)
 		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 0)

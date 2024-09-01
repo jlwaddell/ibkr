@@ -1,9 +1,3 @@
-# TODO: Add comment
-# 
-# Author: Jason
-###############################################################################
-
-
 # libraries
 setwd("C:/Users/Jason/git/ibkr")
 options(xts_check_TZ = FALSE)
@@ -16,16 +10,9 @@ library(oaPlots)
 library(readxl)
 library(tidyquant)
 
-# alpha vantage API key
-api_key <- "V7X7XDUO4IOM111P"
-av_api_key(api_key)
-print(av_api_key())
-
-
 source("./functions/plotFunctions.R")
 source("./functions/loadingFunctions.R")
 source("./functions/calcFunctions.R")
-source("./functions/getSymbolsAV.R")
 
 startFromScratch <- FALSE
 if(startFromScratch) {
@@ -34,8 +21,7 @@ if(startFromScratch) {
 	load("./data/data2min.RData")
 }
 
-periodicity <- "1min"
-desiredPeriodicity <- "2min"
+periodicity <- "2 minutes" # TODO think about this
 # note: yahoo finance data only goes back 60 days
 
 
@@ -76,12 +62,12 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 				from = from, to = to)
 		
 		# fill in missing values # TODO improve
-		missingIdx <- which(is.na(get(x)[, 1]))
-		if(length(missingIdx) > 0) {
-			for(jIdx in 1:length(missingIdx)) {
+		idx <- which(is.na(get(x)[, 1]))
+		if(length(idx) > 0) {
+			for(jIdx in 1:length(idx)) {
 				
 				tmp <- get(x)
-				tmp[missingIdx[jIdx], ] <- tmp[missingIdx[jIdx] - 1, ]
+				tmp[idx[jIdx], ] <- tmp[idx[jIdx] - 1, ]
 				assign(x,  value =  tmp)
 			}
 		}
@@ -105,6 +91,11 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 
 filename <- list.files("./data", pattern = "Stock Train")
 data <- as.data.frame(read_excel(paste0("./data/", filename)))
+
+data <- data[-which(as.Date(data$Date) %in% 
+						c(as.Date("2024-07-26"), as.Date("2024-07-11"), 
+								as.Date("2024-07-12"))),
+		]
 data$plotNum <- 1:nrow(data)
 
 for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
@@ -117,51 +108,32 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 	plotName <- paste0(ticker,  " ", from)
 	if(!(plotName %in% names(dataList))) {
 		
-		x <- getSymbolsAV(ticker, src="av", 
-				api.key = api_key,
-				interval = periodicity,
-				periodicity = "intraday", 
-				month = substr(from, 1, 7))
-		
+		x <- tryCatch(getSymbols(ticker, src="yahoo", 
+				periodicity = periodicity, 
+				from = from, to = to), error = function(e) {
+			# Catch block: handle the error
+			return(e$message)  # Return the error message
+		})
+
 		if(x == ticker) {
-#			cat("yay")
-			
-			# grab the month data and find out which rows correspond to our 'from' day
-			monthData <- as.data.frame(get(x))
-			dateTimes <- unlist(strsplit(rownames(monthData), " "))
-			days <- dateTimes[which((1:length(dateTimes) %% 2) == 1)]
-			times <- dateTimes[which((1:length(dateTimes) %% 2) == 0)]
-			matchingDayIdx <- which(days == from)
-			
-			# subset to the desired day
-			dayData <- monthData[matchingDayIdx, ]
-			dateTimes <- unlist(strsplit(rownames(dayData), " "))
-			times <- dateTimes[which((1:length(dateTimes) %% 2) == 0)]
-			
-			# subset to 9:30 - 16:00 (regular trading hours)
-			time_vector_posix <- as.POSIXct(times, format = "%H:%M:%S", tz = "UTC")
-			start_time <- as.POSIXct("09:30:00", format = "%H:%M:%S", tz = "UTC")
-			end_time <- as.POSIXct("15:59:00", format = "%H:%M:%S", tz = "UTC")
-			filtered_times <- times[time_vector_posix >= start_time & time_vector_posix <= end_time]
-			dayData <- dayData[which(times %in% filtered_times), ]
-			
-			# fill in missing values
-			missingIdx <- which(is.na(dayData[, 1]))
-			if(length(missingIdx) > 0) {
-				for(jIdx in 1:length(missingIdx)) {
+			cat("yay")
+			# fill in missing values # TODO improve
+			idx <- which(is.na(get(x)[, 1]))
+			if(length(idx) > 0) {
+				for(jIdx in 1:length(idx)) {
 					
-					tmp <- dayData
-					tmp[missingIdx[jIdx], ] <- tmp[missingIdx[jIdx] - 1, ]
+					tmp <- get(x)
+					tmp[idx[jIdx], ] <- tmp[idx[jIdx] - 1, ]
 					assign(x,  value =  tmp)
 				}
 			}
 			
-			colnames(dayData) <- c("Open", "High", "Low", "Close", "Volume")
+			if(ticker == "LOW")
+				colnames(LOW) <- c("x.Open", "x.High", "x.Low", "x.Close", "x.Volume")
 			
-			if(desiredPeriodicity == "2min")
-				dayData <- convert_to_2min(dayData)
-		
-			dataList[[length(dataList)+1]] <- dayData
+			rawData <- get(x)
+			rawData <- rawData[-nrow(rawData), ]
+			dataList[[length(dataList)+1]] <- rawData
 			names(dataList)[length(dataList)] <- plotName
 		}
 		
@@ -171,17 +143,8 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 }
 
 
-names(dataList)
-length(dataList)
-
-
-
 
 save(dataList, file = "./data/data2min.RData")
-
-
-
-
 
 
 

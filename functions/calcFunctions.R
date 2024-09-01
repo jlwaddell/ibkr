@@ -381,9 +381,11 @@ count_consecutive_true <- function(x) {
 
 convert_to_2min <- function(dayData) {
 	# Check if the input data frame has the necessary columns
-	if (!all(c("Open", "High", "Low", "Close", "Volume") %in% colnames(dayData))) {
+	if(!all(c("Open", "High", "Low", "Close", "Volume") %in% colnames(dayData))) {
 		stop("Data frame must have columns: Open, High, Low, Close, and Volume")
 	}
+	
+	dayData <- fill_datetime_gaps(dayData)
 	
 	origRownames <- rownames(dayData)
 	endRownames <- origRownames[which((1:length(origRownames) %% 2) == 1)]
@@ -407,4 +409,54 @@ convert_to_2min <- function(dayData) {
 	
 	
 	return(data_2min)
+}
+
+
+
+# Function to detect gaps and fill them
+fill_datetime_gaps <- function(dayData) {
+	
+	# make the datetime colum
+	dayData$datetime <- rownames(dayData)
+	
+	# Ensure the datetime column is of POSIXct type
+	dayData$datetime <- as.POSIXct(dayData$datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+	
+	# Create a complete sequence of datetime values with 1-minute intervals
+	full_sequence <- seq(from = min(dayData$datetime), to = max(dayData$datetime), by = "1 min")
+	
+	# Create a new data frame with the complete sequence
+	complete_data <- data.frame(datetime = full_sequence)
+	
+	# Merge the complete sequence with the original data
+	data_filled <- left_join(complete_data, dayData, by = "datetime")
+	
+	# Fill missing rows by copying values from the previous row
+	data_filled <- data_filled %>% 
+			tidyr::fill(everything(), .direction = "down")
+	rownames(data_filled) <- data_filled$datetime
+	data_filled <- data_filled[, c("Open", "High", "Low", "Close", "Volume")]
+	
+	return(data_filled)
+}
+
+
+
+still_monotonic <- function(close_values, lookback = 20) {
+	# Initialize a logical vector to store "still monotonic" status
+	is_still_monotonic <- rep(TRUE, length(close_values))
+	
+	# Iterate over each time point starting from the (lookback + 1)th time point
+	for (i in (lookback + 1):length(close_values)) {
+		# Get the past 'lookback' close values
+		past_values <- close_values[1:(i - lookback)]
+		
+		# Check if there are any past values that are both higher and lower than the current close value
+		if (any(past_values > close_values[i]) & any(past_values < close_values[i])) {
+			# Set "still monotonic" to FALSE for the current time point
+			is_still_monotonic[i] <- FALSE
+		}
+	}
+	
+	return(is_still_monotonic)
 }
