@@ -1,2 +1,13 @@
 Strategy script looking at profit percent versus stop losses / gains
 Look into trailing stops / breakeven stops
+
+
+
+
+
+
+
+backtest oddities: 
+21 - XOM no trendline?
+maybe trendline through all of data that excludes the first x (5?) timepoints
+      pick best trendline by SS difference

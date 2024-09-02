@@ -234,8 +234,10 @@ vizTradeAndStrategy <- function(data, dataList,
 		blankPlot(xlim = par("usr")[1:2], ylim = ylim)
 		lines(x = fullData$index, y = fullData$rsquared)
 		lines(x = fullData$index, y = fullData$rsquared30, col = gray(0.9))
+		lines(x = fullData$index, y = fullData$rsquaredBest, col = "red")
 		lines(x = fullData$index, y = fullData$choppiness, col = "blue")
 		lines(x = fullData$index, y = fullData$choppiness30, col = "purple")
+		lines(x = fullData$index, y = fullData$choppinessBest, col = "pink")
 		
 		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 1)
 		segments(x0 = 0.5, x1 = nrow(fullData)+0.5, lwd = 2, y0 = 0)

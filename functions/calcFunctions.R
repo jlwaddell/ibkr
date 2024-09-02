@@ -460,3 +460,42 @@ still_monotonic <- function(close_values, lookback = 20) {
 	
 	return(is_still_monotonic)
 }
+
+
+
+compute_best_r_squared <- function(closeData, window_range) {
+	# Use sapply to apply 'compute_r_squared_moving_window' for each window size in the range
+	r_squared_values <- sapply(window_range, function(window_size) {
+				compute_r_squared_moving_window(closeData, window_size)
+			})
+	
+	# Find the maximum R-squared value
+	max_r_squared <- suppressWarnings(apply(r_squared_values, 1, max, na.rm = TRUE))
+	max_r_squared[1:(min(window_range)-1)] <- NA
+	
+	return(max_r_squared)
+}
+
+
+compute_best_choppiness <- function(fullData, window_range) {
+	# Use sapply to apply 'compute_r_squared_moving_window' for each window size in the range
+	choppiness_values <- sapply(window_range, function(window_size) {
+						compute_choppiness_index(fullData, window_size)
+					})
+	
+	# Find the maximum R-squared value
+	max_r_squared <- suppressWarnings(apply(choppiness_values, 1, min, na.rm = TRUE))
+	max_r_squared[1:(min(window_range)-1)] <- NA
+	
+	return(max_r_squared)
+}
+
+
+
+
+
+
+
+
+
+

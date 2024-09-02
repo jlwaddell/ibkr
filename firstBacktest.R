@@ -28,7 +28,7 @@ minimumTimepoint <- 25
 
 r2Thresh <- 0.5   # .9
 chopThresh <- 0.382
-distanceFromTrendlineThreshold <- 2
+distanceFromTrendlineThreshold <- 1.5
 distanceFromPvtThreshold <- 0.5
 
 plVec <- numeric()

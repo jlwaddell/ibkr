@@ -105,6 +105,7 @@ formatFullData <- function(input) {
 			window_size = 20)
 	fullData$rsquared30 <- compute_r_squared_moving_window(fullData$Close,
 			window_size = 30)
+	fullData$rsquaredBest <- compute_best_r_squared(fullData$Close, 20:30)
 	
 	# still monotonic
 	fullData$stillMonotonic <- still_monotonic(close_values = fullData$Close, 
@@ -113,7 +114,7 @@ formatFullData <- function(input) {
 	# choppiness
 	fullData$choppiness <- compute_choppiness_index(fullData, period = 20)
 	fullData$choppiness30 <- compute_choppiness_index(fullData, period = 30)
-	
+	fullData$choppinessBest <- compute_best_choppiness(fullData, 20:30)
 	
 	# volume smoothing
 	nSmooth = 14

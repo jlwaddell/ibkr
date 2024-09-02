@@ -23,7 +23,7 @@ load("./data/data2min.RData")
 filename <- list.files("./data", pattern = "Stock Train")
 data <- as.data.frame(read_excel(paste0("./data/", filename) ))
 
- data <- data[-(98:100), ]
+# data <- data[-(98:100), ]
 
 data$plotNum <- 1:nrow(data)
 
