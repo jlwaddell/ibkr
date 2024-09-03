@@ -17,41 +17,44 @@ source("./functions/calcFunctions.R")
 source("./functions/trendlines.R")
 
 
-choppinessWindow <- 20
-rsquaredWindow <- 20
+lookbackWindow <- 20
+minimumTimepoint <- 21
 stopLossMult = 2
 profitTakeMult = 6
 breakevenTriggerMult = 1
-setBreakeven <- TRUE
-minimumTimepoint <- 25
+setBreakeven <- FALSE
+stopLossType = "fixed"
 
-
-r2Thresh <- 0.5   # .9
-chopThresh <- 0.382
-distanceFromTrendlineThreshold <- 1.5
-distanceFromPvtThreshold <- 0.5
+r2Thresh <- 0.8   # .9
+chopThresh <- 0.5   # 0.382
+distanceFromTrendlineThreshold <- 0.6
+distanceFromPvtThreshold <- 200   # TODO will work on this next
 
 plVec <- numeric()
 k <- 1
 
 # TODO
-# stop losses (look into coding a trailing stop loss)
-# start along the trendline (don't do trade if distance to trendline is too large)
+# walk through the plots manually starting with #1, AMD
+  #                                                 LNG 2024-08-09
+ #                                                 NKE 2024-08-13
+  #  SBUX 08-12 for still monotonic not working
 # figure out a way to do volume properly
+# maybe look for trade confirmation. (to prevent immediate reversals)
 # I'm not sure Rsquared and Choppiness are ideal. Maybe find something that looks for avd distance from support line or something
 
 pdf("./plots/backtest.pdf", width = 10, height = 8)
 for(i in 1:length(dataList)) {   # i <- 1
 	
 	cat(i)
-	fullData <- formatFullData(input = dataList[[i]])
+	fullData <- fullDataList[[i]]
 	
 	# find the streaks and take the 2nd true
-	tfVec <- (fullData$choppiness < chopThresh) & (fullData$rsquared > r2Thresh)
+	tfVec <- (fullData$choppinessBest < chopThresh) & (fullData$rsquaredBest > r2Thresh)
 	tfVec[which(is.na(tfVec))] <- FALSE
-	streakVec <- count_consecutive_true(tfVec)
+	streakVec <- count_consecutive_true(tfVec)  
 	
-	matchedIdxVec <- which(streakVec == 2)
+	matchedIdxVec <- which(tfVec == TRUE)
+#	matchedIdxVec <- which(streakVec == 3)   # TODO improve this logic
 	if(length(matchedIdxVec) > 0)
 		matchedIdxVec <- matchedIdxVec[matchedIdxVec >= minimumTimepoint]
 	
@@ -69,9 +72,9 @@ for(i in 1:length(dataList)) {   # i <- 1
 		# BOT
 		if(     
 				fullData$stillMonotonic[matchedIdx] & 
-				(fullData$Close[matchedIdx] > fullData$Close[matchedIdx - choppinessWindow]) & 
+				(fullData$Close[matchedIdx] > fullData$Close[matchedIdx - lookbackWindow]) & 
 				(fullData$Close[matchedIdx] - distanceFromPvtThreshold * fullData$atr[matchedIdx]  <
-				fullData$slidingScaledPVT[matchedIdx]  )
+					fullData$slidingScaledPVT[matchedIdx]  )
 				) {
 			
 			
@@ -79,9 +82,10 @@ for(i in 1:length(dataList)) {   # i <- 1
 			quantity <- 1
 			
 			# find the best trendline and calculate the distance to it
-			if(matchedIdx > 30) {
-				
-				bestSupport <- calcSupportLine(fullData, type = "rising")
+#			if(matchedIdx > 30) {  # TODO testing
+			{
+				bestSupport <- calcSupportLine(fullData, type = "rising", 
+						matchedIdx = matchedIdx)
 				
 				if(nrow(bestSupport) > 0) {
 					distanceAboveTrendline <- (fullData$Close[matchedIdx] - (bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
@@ -89,56 +93,41 @@ for(i in 1:length(dataList)) {   # i <- 1
 					if(distanceAboveTrendline > distanceFromTrendlineThreshold | distanceAboveTrendline < 0)
 						makeTrade <- FALSE
 				}
-				
 			}
+		
+			
+#			}
 			
 			if(makeTrade) {
-				# define stop loss and profit takes
-				stopLoss <- fullData$Close[matchedIdx] - stopLossMult * fullData$atr[matchedIdx]
-				profitTake <- fullData$Close[matchedIdx] + profitTakeMult * fullData$atr[matchedIdx]
 				
-				# take the stop loss indices that are greater than our trade start (matchedIdx)
-				stopIdx <- which(fullData$Close <= stopLoss)
-				if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
-				
-				# get the profit take indices
-				profIdx <- which(fullData$Close >= profitTake)
-				if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
-				
-				if(length(stopIdx) == 0 & length(profIdx) > 0) {
-					pl <- (profitTake - fullData$Close[matchedIdx]) / fullData$Close[matchedIdx] # winner
-				} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
-					pl <- (stopLoss - fullData$Close[matchedIdx]) / fullData$Close[matchedIdx]  # loser
-				} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
-					pl <- (fullData$Close[nrow(fullData)] - fullData$Close[matchedIdx]) / fullData$Close[matchedIdx] # end of day
-				} else if(profIdx[1] < stopIdx[1]) {
-					pl <- (profitTake - fullData$Close[matchedIdx]) / fullData$Close[matchedIdx] # winner
-				} else 
-					pl <- (stopLoss - fullData$Close[matchedIdx]) / fullData$Close[matchedIdx]  # loser
-				
-				if(setBreakeven) {
-					breakevenTriggerPoint <- fullData$Close[matchedIdx] + breakevenTriggerMult * fullData$atr[matchedIdx]
-					breakevenIdx <- which(fullData$Close >= breakevenTriggerPoint)
-					if(length(breakevenIdx) > 0) breakevenIdx <- breakevenIdx[which(breakevenIdx > matchedIdx)]
+				if(stopLossType == "fixed") {
+					pl <- compute_trade_result_fixed(fullData = fullData, matchedIdx = matchedIdx,
+							stopLossMult = stopLossMult,
+							profitTakeMult = profitTakeMult,
+							action = "BOT")
 					
-					zeroPoint <- which(fullData$Close <= fullData$Close[matchedIdx])
-					if(length(zeroPoint) > 0) zeroPoint <- zeroPoint[which(zeroPoint > breakevenIdx[1])]
-					
-					if(length(zeroPoint) > 0) {
-						if(length(stopIdx) == 0) stopIdx <- nrow(fullData)
-						if(length(profIdx) == 0) profIdx <- nrow(fullData)
-						
-						if( (zeroPoint[1] < stopIdx[1]) & (zeroPoint[1] < profIdx[1]) )
+					if(setBreakeven) {
+						breakevenHappens <- checkBreakeven(fullData = fullData, matchedIdx = matchedIdx, 
+								stopLossMult = stopLossMult,
+								profitTakeMult = profitTakeMult,
+								breakevenTriggerMult = breakevenTriggerMult,
+								action = "BOT") 
+						if(breakevenHappens)
 							pl <- 0
 					}
-					
+				} else if(stopLossType == "trailing") {
+					pl <- compute_trade_result_trailing(fullData = fullData, matchedIdx = matchedIdx,
+							stopLossMult = stopLossMult,
+							profitTakeMult = profitTakeMult,
+							action = "BOT")
 				}
+				
 			}
 			
 			
 		} else if(
 				fullData$stillMonotonic[matchedIdx] & 
-				(fullData$Close[matchedIdx] < fullData$Close[matchedIdx - choppinessWindow]) & 
+				(fullData$Close[matchedIdx] < fullData$Close[matchedIdx - lookbackWindow]) & 
 				(fullData$Close[matchedIdx] + distanceFromPvtThreshold * fullData$atr[matchedIdx] >
 					fullData$slidingScaledPVT[matchedIdx] )
 				){  # SLD
@@ -147,67 +136,65 @@ for(i in 1:length(dataList)) {   # i <- 1
 			quantity <- -1
 			
 			# find the best trendline and calculate the distance to it
-			if(matchedIdx > 30) {
-				
-				bestSupport <- calcSupportLine(fullData, type = "falling")
-				
-				if(nrow(bestSupport) > 0) {
-					distanceAboveTrendline <- (fullData$Close[matchedIdx] - (bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
-							fullData$atr[matchedIdx]
-					if(distanceAboveTrendline < (-1 * distanceFromTrendlineThreshold) | distanceAboveTrendline > 0)
-						makeTrade <- FALSE
-				}
+#			if(matchedIdx > 30) { # TODO testing
+			
+			bestSupport <- calcSupportLine(fullData, type = "falling", 
+					matchedIdx = matchedIdx)
+			
+#			x = bestSupport$slope
+#			y = bestSupport$intercept
+#			plot(fullData$index[1:matchedIdx], fullData$High[1:matchedIdx])
+#			segments(x0 = 1, 
+#					x1 = matchedIdx, 
+#					y0 = y + x * 1, 
+#					y1 = y + x * matchedIdx, 
+#					lwd = 2)
+			
+			if(nrow(bestSupport) > 0) {
+				distanceBelowTrendline <- (fullData$Close[matchedIdx] - 
+							(bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
+						fullData$atr[matchedIdx]
+				if(distanceBelowTrendline < (-1 * distanceFromTrendlineThreshold) | distanceBelowTrendline > 0)
+					makeTrade <- FALSE
 			}
+#			}
 			
 			if(makeTrade) {
-				stopLoss <- fullData$Close[matchedIdx] + stopLossMult * fullData$atr[matchedIdx]
-				profitTake <- fullData$Close[matchedIdx] - profitTakeMult * fullData$atr[matchedIdx]
 				
-				# take the stop loss indices that are greater than our trade start (matchedIdx)
-				stopIdx <- which(fullData$Close >= stopLoss)
-				if(length(stopIdx) > 0) stopIdx <- stopIdx[which(stopIdx > matchedIdx)]
-				
-				# get the profit take indices
-				profIdx <- which(fullData$Close <= profitTake)
-				if(length(profIdx) > 0) profIdx <- profIdx[which(profIdx > matchedIdx)]
-				
-				if(length(stopIdx) == 0 & length(profIdx) > 0) {
-					pl <- (fullData$Close[matchedIdx] - profitTake) / fullData$Close[matchedIdx] # winner
-				} else if(length(stopIdx) > 0 & length(profIdx) == 0) {
-					pl <- (fullData$Close[matchedIdx] - stopLoss) / fullData$Close[matchedIdx]  # loser
-				} else if(length(stopIdx) == 0 & length(profIdx) == 0) {
-					pl <- (fullData$Close[matchedIdx] - fullData$Close[nrow(fullData)]) / fullData$Close[matchedIdx] # end of day
-				} else if(profIdx[1] < stopIdx[1]) {
-					pl <- (fullData$Close[matchedIdx] - profitTake) / fullData$Close[matchedIdx] # winner
-				} else 
-					pl <- (fullData$Close[matchedIdx] - stopLoss) / fullData$Close[matchedIdx]  # loser
-				
-				if(setBreakeven) {
-					breakevenTriggerPoint <- fullData$Close[matchedIdx] - breakevenTriggerMult * fullData$atr[matchedIdx]
-					breakevenIdx <- which(fullData$Close <= breakevenTriggerPoint)
-					if(length(breakevenIdx) > 0) breakevenIdx <- breakevenIdx[which(breakevenIdx > matchedIdx)]
+				if(stopLossType == "fixed") {
+					pl <- compute_trade_result_fixed(fullData = fullData, 
+							matchedIdx = matchedIdx,
+							stopLossMult = stopLossMult,
+							profitTakeMult = profitTakeMult,
+							action = "SLD")
 					
-					zeroPoint <- which(fullData$Close >= fullData$Close[matchedIdx])
-					if(length(zeroPoint) > 0) zeroPoint <- zeroPoint[which(zeroPoint > breakevenIdx[1])]
-					
-					if(length(zeroPoint) > 0) {
-						if(length(stopIdx) == 0) stopIdx <- nrow(fullData)
-						if(length(profIdx) == 0) profIdx <- nrow(fullData)
-						
-						if( (zeroPoint[1] < stopIdx[1]) & (zeroPoint[1] < profIdx[1]) )
+					if(setBreakeven) {
+						breakevenHappens <- checkBreakeven(fullData = fullData,
+								matchedIdx = matchedIdx, 
+								stopLossMult = stopLossMult,
+								profitTakeMult = profitTakeMult,
+								breakevenTriggerMult = breakevenTriggerMult,
+								action = "SLD") 
+						if(breakevenHappens)
 							pl <- 0
 					}
+				} else if(stopLossType == "trailing") {
+					pl <- compute_trade_result_trailing(fullData = fullData, matchedIdx = matchedIdx,
+							stopLossMult = stopLossMult,
+							profitTakeMult = profitTakeMult,
+							action = "SLD")
 					
 				}
-			}
-		
-			
+				
+			}			
 		}  
 		
 		if(makeTrade) {
 			fakeData <- data.frame(Symbol = ticker, Quantity = quantity, 
 					T..Price = fullData$Close[matchedIdx], day = date, time = time, plotNum = 1)
-			vizTradeAndStrategy(data = fakeData, dataList = dataList, 
+			vizTradeAndStrategy(data = fakeData, 
+					dataList = dataList, 
+					fullDataList = fullDataList, 
 					plotNum = 1, 
 					stopLossMult = stopLossMult, profitTakeMult = profitTakeMult, 
 #				omitTimepoints = c(1:5, 191:195), 
@@ -219,8 +206,9 @@ for(i in 1:length(dataList)) {   # i <- 1
 			
 			plVec[k] <- pl
 			k <- k + 1
+			break
 		}
-
+		
 		
 	}
 	
@@ -236,9 +224,9 @@ length(plVec)
 
 mean(plVec) / (sd(plVec) / sqrt(length(plVec)))
 
+# hist(plVec, breaks = 50)
 
-
-
+round(plVec, 3)
 
 
 

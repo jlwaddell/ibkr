@@ -43,6 +43,7 @@ data$plotNum <- as.numeric(as.factor(data$plotNum))
 pdf("./plots/selectedTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 10
 	vizTradeAndStrategy(data = data, dataList = dataList, 
+			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
 			omitTimepoints = c(1:5, 191:195), 
@@ -56,6 +57,7 @@ dev.off()
 pdf("./plots/singleTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
 	vizTradeAndStrategy(data = data, dataList = dataList, 
+			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
 			timepointsBefore = 60, ending = "tradeEnd")
@@ -67,6 +69,7 @@ dev.off()
 pdf("./plots/tradeSetups.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 11
 	vizTradeAndStrategy(data = data, dataList = dataList, 
+			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
 			timepointsBefore = 60, ending = "tradeStart", 
@@ -80,6 +83,7 @@ plotNum <- 17
 for(numTimepoints in seq(10, 100, by = 2)) {
 	omit <- numTimepoints
 	vizTradeAndStrategy(data = data, dataList = dataList, 
+			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			stopLossMult = 4, profitTakeMult = 3.5, 
 			omitTimepoints = c(numTimepoints:195), 
@@ -178,6 +182,7 @@ round(propEdge / se_matrix, 2)   # z values
 pdf("./plots/selectedGoodTrades.pdf", width = 10, height = 8)
 for(plotNum in 1:max(dataNoBadEntries$plotNum)) {  # plotNum <- 1
 	vizTradeAndStrategy(data = dataNoBadEntries, dataList = dataList, 
+			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
 			omitTimepoints = c(1:5, 191:195), 

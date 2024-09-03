@@ -30,6 +30,7 @@ data$plotNum <- 1:nrow(data)
 pdf("./plots/trains.pdf", width = 10, height = 8)
 for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 3
 	vizTradeAndStrategy(data = data, dataList = dataList, 
+			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			omitTimepoints = c(1:10, 380:390), 
 			includeADX = TRUE, 

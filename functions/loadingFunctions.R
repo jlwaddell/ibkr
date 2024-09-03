@@ -74,7 +74,6 @@ formatFullData <- function(input) {
 		}
 	}
 	
-	
 	# extract the time for the full data
 	dateTimes <- unlist(strsplit(rownames(fullData), " "))
 	days <- dateTimes[which((1:length(dateTimes) %% 2) == 1)]

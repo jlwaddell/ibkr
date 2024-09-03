@@ -12,7 +12,7 @@ find_best_support_line <- function(stockWindowData, candidate_lines, type = "ris
 		# Calculate the y-values of the candidate line for each x (index)
 		fittedValues <- intercept + slope * stockWindowData$index
 		
-		weights <- (stockWindowData$index - min(stockWindowData$index))  # TODO think about
+		weights <- rep(1, length(fittedValues)) # TODO think about
 		
 		# Compute the sum of squared differences between the "Low" prices and the line
 		if(type == "rising")
@@ -31,13 +31,16 @@ find_best_support_line <- function(stockWindowData, candidate_lines, type = "ris
 
 
 proposeRisingTrendlines <- function(stockWindowData) {
+	
 	# Filter prices data for lows that fall on the convex hull
-	lows <- stockWindowData[chull(stockWindowData[c("index", "Low")]), ] %>%
-			filter(index < max(index))
+	lows <- find_local_minmaxs(stockWindowData = stockWindowData, 
+			type = "rising")
+	if(nrow(lows) < 2)
+		lows <- stockWindowData[chull(stockWindowData[c("index", "Low")]), ] %>%
+				filter(index < max(index))
 	
 	# Find all unique possible combinations of two lows
 	# (and all unique possible combinations of their associated dates)
-	
 	xCols <- as.data.frame(t(combn(lows$index, m=2, simplify=TRUE)))
 	colnames(xCols) <- c("X1", "X2")
 	yCols <- as.data.frame(t(combn(lows$Low, m=2, simplify=TRUE)))
@@ -53,35 +56,49 @@ proposeRisingTrendlines <- function(stockWindowData) {
 		data.frame(intercept = model$coefficients[1], 
 				slope = model$coefficients[2])
 	}
-	low_trendlines <- map_dfr(n,low_trendfinder,
+	risingTrendlines <- map_dfr(n,low_trendfinder,
 			all_lowcombos = all_lowcombos)
 	
-	# x = low_trendlines$slope[1]
-	# y = low_trendlines$intercept[1]
+	
+#	x = risingTrendlines$slope[1]
+#	y = risingTrendlines$intercept[1]
+#	plot(stockWindowData$index, stockWindowData$Low)
+#	points(x = lows$index, y = lows$Low, pch = 19)
+#	segments(x0 = min(stockWindowData$index), 
+#			x1 = max(stockWindowData$index), 
+#			y0 = y + x * min(stockWindowData$index), 
+#			y1 = y + x * max(stockWindowData$index), 
+#			lwd = 2)
+	
 	
 	# For each low_trendline, check if any low in the prices dataframe falls below the line
 	# Also make sure the trendline wouldn't be less than half the current price for today's date
-	low_trendline_test <- function(x, y, prices){
-		!any(x * as.numeric(prices$index) + y > prices$Low + 0.01) &    # TRUE
-				!(x*max(prices$index) + y < 0.5*prices$Close[nrow(prices)])  # TRUE
+	low_trendline_test <- function(x, y, stockWindowData){
+		closeBelowTrendline <- stockWindowData$Low + 0.01 < 
+				x * as.numeric(stockWindowData$index) + y 
+		sum(closeBelowTrendline) <= 4
 	}
-	none_below <- map2(.x = low_trendlines$slope, 
-			.y = low_trendlines$intercept, .f = low_trendline_test,
-			prices = stockWindowData)
-	none_below <- unlist(none_below)
-	low_trendlines <- low_trendlines[none_below, ]
+	fewBelow <- map2(.x = risingTrendlines$slope, 
+			.y = risingTrendlines$intercept, .f = low_trendline_test,
+			stockWindowData = stockWindowData)
+	fewBelow <- unlist(fewBelow)
+	risingTrendlines <- risingTrendlines[fewBelow, ]
 	
-	return(low_trendlines)
+	return(risingTrendlines)
 }
 
 
 proposeFallingTrendlines <- function(stockWindowData) {
 	# Filter prices data for lows that fall on the convex hull
-	highs <- stockWindowData[chull(stockWindowData[c("index", "High")]), ] %>%
-			filter(index < max(index))
+
+	highs <- find_local_minmaxs(stockWindowData = stockWindowData, 
+			type = "falling")
+	if(nrow(highs) < 2)
+		highs <- stockWindowData[chull(stockWindowData[c("index", "High")]), ] %>%
+				filter(index < max(index))
 	
 	# Find all unique possible combinations of two lows
-	# (and all unique possible combinations of their associated dates)	
+	# (and all unique possible combinations of their associated dates)	f
 	xCols <- as.data.frame(t(combn(highs$index, m=2, simplify=TRUE)))
 	colnames(xCols) <- c("X1", "X2")
 	yCols <- as.data.frame(t(combn(highs$High, m=2, simplify=TRUE)))
@@ -97,50 +114,93 @@ proposeFallingTrendlines <- function(stockWindowData) {
 		data.frame(intercept = model$coefficients[1], 
 				slope = model$coefficients[2])
 	}
-	high_trendlines <- map_dfr(n, high_trendfinder,
+	fallingTrendlines <- map_dfr(n, high_trendfinder,
 			all_highcombos = all_highcombos)
 	
-	# x = high_trendlines$slope[8]
-	# y = high_trendlines$intercept[8]
+#	x = fallingTrendlines$slope[10]
+#	y = fallingTrendlines$intercept[10]
+#	plot(stockWindowData$index, stockWindowData$High)
+#	points(x = highs$index, y = highs$High, pch = 19)
+#	segments(x0 = min(stockWindowData$index), 
+#			x1 = max(stockWindowData$index), 
+#			y0 = y + x * min(stockWindowData$index), 
+#			y1 = y + x * max(stockWindowData$index), 
+#			lwd = 2)
 	
-	# For each low_trendline, check if any low in the prices dataframe falls below the line
-	# Keep only trendlines for which this is FALSE
-	# Also make sure the trendline wouldn't be less than half the current price for today's date
-	high_trendline_test <- function(x, y, prices){
-		!any(x * as.numeric(prices$index) + y < prices$High - 0.01) 
+	# For each low_trendline, check how many High values fall above the trendline
+	high_trendline_test <- function(x, y, stockWindowData){
+		closeAboveTrendline <- !(x * as.numeric(stockWindowData$index) +
+				y > stockWindowData$High - 0.01)
+		sum(closeAboveTrendline) <= 4 # TODO hardcoded 
 	}
-	none_above <- map2(.x = high_trendlines$slope, 
-			.y = high_trendlines$intercept, .f = high_trendline_test,
-			prices = stockWindowData)
-	none_above <- unlist(none_above)
-	high_trendlines <- high_trendlines[none_above, ]
+	few_above <- map2(.x = fallingTrendlines$slope, 
+			.y = fallingTrendlines$intercept, .f = high_trendline_test,
+			stockWindowData = stockWindowData)
+	few_above <- unlist(few_above)
+	fallingTrendlines <- fallingTrendlines[few_above, ]
 	
-	return(high_trendlines)
+	return(fallingTrendlines)
 }
 
 
-calcSupportLine <- function(fullData, trendlineLookback = 30, optimizationRange = c(25, 5), 
-		type = "rising") {
-	
-	# calculate all possible trendlines
-#	selectedRows <- (matchedIdx - trendlineLookback):(matchedIdx - 1)
-	selectedRows <- (matchedIdx - optimizationRange[1]):(matchedIdx - optimizationRange[2])
-	if(type == "rising") {
-		allTrendlines <- proposeRisingTrendlines(stockWindowData = fullData[selectedRows, ])
-	} else {
-		allTrendlines <- proposeFallingTrendlines(stockWindowData = fullData[selectedRows, ])
-	}
+calcSupportLine <- function(fullData, optimizationRange = c(60, 5), 
+		type = "rising", matchedIdx, minimumSupportTime = 6) {
 		
-	# pick the best one (least-squares)
+	# calculate all possible trendlines
 	selectedRows <- (matchedIdx - optimizationRange[1]):(matchedIdx - optimizationRange[2])
-	bestSupportIdx <- find_best_support_line(stockWindowData = fullData[selectedRows, ],  # TODO fix
-			candidate_lines = allTrendlines, type = type)
-	bestSupport <- allTrendlines[bestSupportIdx, ]
+	selectedRows <- selectedRows[selectedRows >= minimumSupportTime]
+	stockWindowData <- fullData[selectedRows, ]
 	
-	return(bestSupport)
+	if(length(selectedRows) >= 10) {
+		if(type == "rising") {
+			allTrendlines <- proposeRisingTrendlines(stockWindowData = fullData[selectedRows, ])
+		} else {
+			allTrendlines <- proposeFallingTrendlines(stockWindowData = fullData[selectedRows, ])
+		}
+		
+		# pick the best one (least-squares)
+		bestSupportIdx <- find_best_support_line(stockWindowData = fullData[selectedRows, ], 
+				candidate_lines = allTrendlines, type = type)
+		bestSupport <- allTrendlines[bestSupportIdx, ]
+		
+		return(bestSupport)
+	}
+	
 }
 
 
+
+# Function to find local minima in stock price data
+find_local_minmaxs <- function(stockWindowData, type = "rising") {
+	# Initialize an empty data frame to store local minima
+	local_minima <- data.frame()
+	
+	if(type == "rising") {
+		# Loop through the price data from the second to the second-to-last row
+		for (kRow in 2:(nrow(stockWindowData) - 1)) {
+			# Check if the current price is less than the previous and next prices
+			if (stockWindowData$Low[kRow] < stockWindowData$Low[kRow - 1] && 
+					stockWindowData$Low[kRow] < stockWindowData$Low[kRow + 1]) {
+				# If a local minimum is found, add the row to the local_minima data frame
+				local_minima <- rbind(local_minima, stockWindowData[kRow, ])
+			}
+		}
+	}
+
+	if(type == "falling") {
+		# Loop through the price data from the second to the second-to-last row
+		for (kRow in 2:(nrow(stockWindowData) - 1)) {
+			# Check if the current price is less than the previous and next prices
+			if (stockWindowData$High[kRow] > stockWindowData$High[kRow - 1] && 
+					stockWindowData$High[kRow] > stockWindowData$High[kRow + 1]) {
+				# If a local minimum is found, add the row to the local_minima data frame
+				local_minima <- rbind(local_minima, stockWindowData[kRow, ])
+			}
+		}
+	}
+	
+	return(local_minima)
+}
 
 
 

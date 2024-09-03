@@ -5,7 +5,8 @@
 
 
 # function definition
-vizTradeAndStrategy <- function(data, dataList,
+vizTradeAndStrategy <- function(data, 
+		dataList, fullDataList, 
 		plotNum = 1, 
 		stopLossMult = 4, profitTakeMult = 3.5, 
 		omitTimepoints = NULL, includeADX = FALSE, 
@@ -29,7 +30,7 @@ vizTradeAndStrategy <- function(data, dataList,
 	# define the fullData object	
 	rawIdx <- which(names(dataList) == paste0(ticker, " ", from))
 	rawData <- dataList[[rawIdx]]
-	fullData <- formatFullData(input = rawData)
+	fullData <- fullDataList[[rawIdx]]
 	
 	# remove omitted timepoints
 	if(!is.null(omitTimepoints)) {
@@ -142,12 +143,13 @@ vizTradeAndStrategy <- function(data, dataList,
 			# plot profit/loss rectangles
 			if(tmpData$Quantity[kTmp] > 0 & (kTmp %% 2) == 1) {
 				
-				if(matchedIdx > 30) {
-					bestSupport <- calcSupportLine(fullData, type = "rising")
+				if(matchedIdx > 20) {
+					bestSupport <- calcSupportLine(fullData, type = "rising", 
+							matchedIdx = matchedIdx)
 					
 					if(nrow(bestSupport) > 0) {
-						segments(x0 = matchedIdx - 25, x1 = matchedIdx, 
-								y0 = bestSupport$intercept + bestSupport$slope * (matchedIdx - 25), 
+						segments(x0 = matchedIdx - 40, x1 = matchedIdx, 
+								y0 = bestSupport$intercept + bestSupport$slope * (matchedIdx - 40), 
 								y1 = bestSupport$intercept + bestSupport$slope * (matchedIdx), 
 								lwd = 2)
 					}
@@ -167,12 +169,13 @@ vizTradeAndStrategy <- function(data, dataList,
 				
 			} else if(tmpData$Quantity[kTmp] < 0 & (kTmp %% 2) == 1) {
 				
-				if(matchedIdx > 30) {
-					bestSupport <- calcSupportLine(fullData, type = "falling")
+				if(matchedIdx > 20) {
+					bestSupport <- calcSupportLine(fullData, type = "falling", 
+							matchedIdx = matchedIdx)
 					
 					if(nrow(bestSupport) > 0) {
-						segments(x0 = matchedIdx - 25, x1 = matchedIdx, 
-								y0 = bestSupport$intercept + bestSupport$slope * (matchedIdx - 25), 
+						segments(x0 = matchedIdx - 40, x1 = matchedIdx, 
+								y0 = bestSupport$intercept + bestSupport$slope * (matchedIdx - 40), 
 								y1 = bestSupport$intercept + bestSupport$slope * (matchedIdx), 
 								lwd = 2)
 					}
