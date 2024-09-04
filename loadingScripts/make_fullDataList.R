@@ -22,6 +22,7 @@ load("./data/data2min.RData")
 
 fullDataList <- list()
 for(i in 1:length(dataList)) {
+	cat(i)
 	
 	rawData <- dataList[[i]]
 	fullData <- formatFullData(input = rawData)

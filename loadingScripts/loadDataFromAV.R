@@ -17,16 +17,17 @@ av_api_key(api_key)
 print(av_api_key())
 
 
-source("./functions/plotFunctions.R")
-source("./functions/loadingFunctions.R")
-source("./functions/calcFunctions.R")
-source("./functions/getSymbolsAV.R")
+functionFiles <- list.files("./functions")
+for(iFile in 1:length(functionFiles)) {
+	source(paste0("./functions/", functionFiles[iFile]))
+}
 
 startFromScratch <- FALSE
 if(startFromScratch) {
 	dataList <- list()
 } else {
 	load("./data/data2min.RData")
+	load("./data/fullDataList.RData")
 }
 
 periodicity <- "1min"
@@ -88,6 +89,10 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 		rawData <- rawData[-nrow(rawData), ]
 		dataList[[length(dataList)+1]] <- rawData
 		names(dataList)[length(dataList)] <- plotName
+		
+		fullData <- formatFullData(input = dayData)
+		fullDataList[[length(fullDataList)+1]] <- fullData
+		names(fullDataList)[length(fullDataList)] <- plotName
 	}
 	
 }
@@ -158,6 +163,10 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 		
 			dataList[[length(dataList)+1]] <- dayData
 			names(dataList)[length(dataList)] <- plotName
+			
+			fullData <- formatFullData(input = dayData)
+			fullDataList[[length(fullDataList)+1]] <- fullData
+			names(fullDataList)[length(fullDataList)] <- plotName
 		}
 		
 		
@@ -173,6 +182,7 @@ length(dataList)
 
 
 save(dataList, file = "./data/data2min.RData")
+save(fullDataList, file = "./data/fullDataList.RData")
 
 
 

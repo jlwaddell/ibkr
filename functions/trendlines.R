@@ -36,8 +36,9 @@ proposeRisingTrendlines <- function(stockWindowData) {
 	lows <- find_local_minmaxs(stockWindowData = stockWindowData, 
 			type = "rising")
 	if(nrow(lows) < 2)
-		lows <- stockWindowData[chull(stockWindowData[c("index", "Low")]), ] %>%
-				filter(index < max(index))
+		lows <- stockWindowData[chull(stockWindowData[c("index", "Low")]), ]
+#	%>%
+#				filter(index < max(index))
 	
 	# Find all unique possible combinations of two lows
 	# (and all unique possible combinations of their associated dates)
@@ -59,9 +60,11 @@ proposeRisingTrendlines <- function(stockWindowData) {
 	risingTrendlines <- map_dfr(n,low_trendfinder,
 			all_lowcombos = all_lowcombos)
 	
+	risingTrendlines <- risingTrendlines[risingTrendlines$slope > 0, ]
 	
-#	x = risingTrendlines$slope[1]
-#	y = risingTrendlines$intercept[1]
+	
+#	x = risingTrendlines$slope[4]
+#	y = risingTrendlines$intercept[4]
 #	plot(stockWindowData$index, stockWindowData$Low)
 #	points(x = lows$index, y = lows$Low, pch = 19)
 #	segments(x0 = min(stockWindowData$index), 
@@ -76,7 +79,7 @@ proposeRisingTrendlines <- function(stockWindowData) {
 	low_trendline_test <- function(x, y, stockWindowData){
 		closeBelowTrendline <- stockWindowData$Low + 0.01 < 
 				x * as.numeric(stockWindowData$index) + y 
-		sum(closeBelowTrendline) <= 4
+		sum(closeBelowTrendline) <= 3
 	}
 	fewBelow <- map2(.x = risingTrendlines$slope, 
 			.y = risingTrendlines$intercept, .f = low_trendline_test,
@@ -94,8 +97,9 @@ proposeFallingTrendlines <- function(stockWindowData) {
 	highs <- find_local_minmaxs(stockWindowData = stockWindowData, 
 			type = "falling")
 	if(nrow(highs) < 2)
-		highs <- stockWindowData[chull(stockWindowData[c("index", "High")]), ] %>%
-				filter(index < max(index))
+		highs <- stockWindowData[chull(stockWindowData[c("index", "High")]), ] 
+#	%>%
+#				filter(index < max(index))  # TODO maybe uncomment this later
 	
 	# Find all unique possible combinations of two lows
 	# (and all unique possible combinations of their associated dates)	f
@@ -116,6 +120,7 @@ proposeFallingTrendlines <- function(stockWindowData) {
 	}
 	fallingTrendlines <- map_dfr(n, high_trendfinder,
 			all_highcombos = all_highcombos)
+	fallingTrendlines <- fallingTrendlines[fallingTrendlines$slope < 0, ]
 	
 #	x = fallingTrendlines$slope[10]
 #	y = fallingTrendlines$intercept[10]
@@ -131,7 +136,7 @@ proposeFallingTrendlines <- function(stockWindowData) {
 	high_trendline_test <- function(x, y, stockWindowData){
 		closeAboveTrendline <- !(x * as.numeric(stockWindowData$index) +
 				y > stockWindowData$High - 0.01)
-		sum(closeAboveTrendline) <= 4 # TODO hardcoded 
+		sum(closeAboveTrendline) <= 3 # TODO hardcoded 
 	}
 	few_above <- map2(.x = fallingTrendlines$slope, 
 			.y = fallingTrendlines$intercept, .f = high_trendline_test,
@@ -179,8 +184,8 @@ find_local_minmaxs <- function(stockWindowData, type = "rising") {
 		# Loop through the price data from the second to the second-to-last row
 		for (kRow in 2:(nrow(stockWindowData) - 1)) {
 			# Check if the current price is less than the previous and next prices
-			if (stockWindowData$Low[kRow] < stockWindowData$Low[kRow - 1] && 
-					stockWindowData$Low[kRow] < stockWindowData$Low[kRow + 1]) {
+			if (stockWindowData$Low[kRow] <= stockWindowData$Low[kRow - 1] && 
+					stockWindowData$Low[kRow] <= stockWindowData$Low[kRow + 1]) {
 				# If a local minimum is found, add the row to the local_minima data frame
 				local_minima <- rbind(local_minima, stockWindowData[kRow, ])
 			}
@@ -191,8 +196,8 @@ find_local_minmaxs <- function(stockWindowData, type = "rising") {
 		# Loop through the price data from the second to the second-to-last row
 		for (kRow in 2:(nrow(stockWindowData) - 1)) {
 			# Check if the current price is less than the previous and next prices
-			if (stockWindowData$High[kRow] > stockWindowData$High[kRow - 1] && 
-					stockWindowData$High[kRow] > stockWindowData$High[kRow + 1]) {
+			if (stockWindowData$High[kRow] >= stockWindowData$High[kRow - 1] && 
+					stockWindowData$High[kRow] >= stockWindowData$High[kRow + 1]) {
 				# If a local minimum is found, add the row to the local_minima data frame
 				local_minima <- rbind(local_minima, stockWindowData[kRow, ])
 			}

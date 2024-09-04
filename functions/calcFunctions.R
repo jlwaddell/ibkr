@@ -447,14 +447,16 @@ still_monotonic <- function(close_values, lookback = 20) {
 	is_still_monotonic <- rep(TRUE, length(close_values))
 	
 	# Iterate over each time point starting from the (lookback + 1)th time point
-	for (i in (lookback + 1):length(close_values)) {
+	for (i in (lookback + 6):length(close_values)) {
 		# Get the past 'lookback' close values
-		past_values <- close_values[1:(i - lookback)]
+		past_values <- close_values[6:(i - lookback)]
 		
 		# Check if there are any past values that are both higher and lower than the current close value
 		if (any(past_values > close_values[i]) & any(past_values < close_values[i])) {
 			# Set "still monotonic" to FALSE for the current time point
 			is_still_monotonic[i] <- FALSE
+			is_still_monotonic[i:(length(close_values))] <- FALSE
+			break
 		}
 	}
 	
@@ -497,5 +499,46 @@ compute_best_choppiness <- function(fullData, window_range) {
 
 
 
+
+# Function to scale 'pvt' values and map them to the range of price data
+scale_and_map_pvt <- function(fullData, matchedIdx, scalingRange = c(29, 10)) {
+	
+	if(matchedIdx < 35) {
+		return(NA)
+	} else {
+		
+		# Determine the end time for the first 'scale_duration' minutes
+		startIdx <- matchedIdx - scalingRange[1]
+		endIdx <- matchedIdx - scalingRange[2]
+		
+		# Filter data for the first 'scale_duration' minutes
+		pvtVec <- fullData$pvt[fullData$index >= startIdx & fullData$index <= endIdx]
+		closeVec <- fullData$Close[fullData$index >= startIdx & fullData$index <= endIdx]
+		
+		# Calculate min and max for scaling from the first 20 minutes
+		pvt_min <- min(pvtVec, na.rm = TRUE)
+		pvt_max <- max(pvtVec, na.rm = TRUE)
+		
+		# Calculate the range and min of the price data for the first 20 minutes
+		price_min <- min(closeVec, na.rm = TRUE)
+		price_max <- max(closeVec, na.rm = TRUE)
+		price_range <- price_max - price_min
+		
+		# Define the scaling function
+		scale_to_01 <- function(x) {
+			(x - pvt_min) / (pvt_max - pvt_min)
+		}
+		
+		# Apply the scaling function to the entire 'pvt' column
+		pvtScaled <- scale_to_01(fullData$pvt)
+		
+		# Map scaled pvt values to the range of price data
+		pvtMapped <- pvtScaled * price_range + price_min
+		
+		return(pvtMapped[matchedIdx])
+		
+	}
+	
+}
 
 

@@ -11,7 +11,8 @@ vizTradeAndStrategy <- function(data,
 		stopLossMult = 4, profitTakeMult = 3.5, 
 		omitTimepoints = NULL, includeADX = FALSE, 
 		dataType = "normal", 
-		ending = "day", timepointsBefore = NULL) {
+		ending = "day", timepointsBefore = NULL, 
+		titleAddendum = NULL) {
 	
 	# prep the tmpData object
 	if(dataType == "train") {
@@ -58,6 +59,7 @@ vizTradeAndStrategy <- function(data,
 	# calc endtime
 	if(ending == "tradeStart") {
 		endIdx <- matchedIdx
+		tmpData <- tmpData[1, ]
 	} else if(ending == "tradeEnd") {
 		endIdx <- calcTradeEndTime(tmpData, fullData = fullData, rowNum = 1, 
 				stopLossMult = stopLossMult, profitTakeMult = profitTakeMult) 
@@ -85,6 +87,8 @@ vizTradeAndStrategy <- function(data,
 				stopLossMult, ", profitTakeMult = ", profitTakeMult)
 #		, ", Profit = ", round(sum(tmpData$Realized.P.L), 2) 
 	}
+	if(!is.null(titleAddendum))
+		plotTitle <- paste0(plotTitle, titleAddendum)
 	
 	if(class(rawData)[1] == "data.frame")
 		rawData <- as.xts(rawData)
@@ -211,7 +215,8 @@ vizTradeAndStrategy <- function(data,
 	scaledPVT <- min(fullData$Close) + scaledPVT * 
 			abs(diff(range(fullData$Close, na.rm = TRUE)))
 	lines(x = 1:nrow(fullData), y = scaledPVT, lwd = 1.5, col = "orange")
-	lines(x = 1:nrow(fullData), y = fullData$slidingScaledPVT, lwd = 1, col = oaColors("green"))
+#	lines(x = 1:nrow(fullData), y = fullData$slidingScaledPVT, lwd = 1, col = oaColors("green"))
+	lines(x = 1:nrow(fullData), y = fullData$pvtMapped, lwd = 1.5, col = oaColors("green"))
 	
 	# SAR
 #	points(x = fullData$index, y = fullData$sar, pch = 19, cex = 0.5)

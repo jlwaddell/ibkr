@@ -122,6 +122,42 @@ formatFullData <- function(input) {
 	fullData$volumeSmooth[nSmooth:nrow(fullData)] <- 
 			volumeEMA[nSmooth:nrow(fullData)]
 	
+	# supports and trendlines
+	fullData$slope <- fullData$intercept <- 
+			fullData$distanceAboveTrendline <- fullData$precedingDistMin <- 
+			fullData$precedingDistMax <- rep(NA, nrow(fullData))
+	
+	for(matchedIdx in 21:nrow(fullData)) {
+		
+		if(fullData$Close[matchedIdx] > fullData$Close[matchedIdx - 20]) {
+			
+			bestSupport <- calcSupportLine(fullData, type = "rising", 
+					matchedIdx = matchedIdx)	
+		}
+		
+		if(fullData$Close[matchedIdx] <= fullData$Close[matchedIdx - 20]) {
+			
+			bestSupport <- calcSupportLine(fullData, type = "falling", 
+					matchedIdx = matchedIdx)	
+		}
+		
+		if(nrow(bestSupport) > 0) {
+			fullData$intercept[matchedIdx] <- bestSupport$intercept
+			fullData$slope[matchedIdx] <- bestSupport$slope
+			
+			fullData$distanceAboveTrendline[matchedIdx] <- (fullData$Close[matchedIdx] -
+						(bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
+					fullData$atr[matchedIdx]
+			
+			previousIdx <- (matchedIdx-9):(matchedIdx-1)
+			previousDistances <-  (fullData$High[previousIdx] - (bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
+					fullData$atr[matchedIdx]
+			fullData$precedingDistMax[matchedIdx] <- max(previousDistances)
+			fullData$precedingDistMin[matchedIdx] <- min(previousDistances)
+		}
+		
+	}
+	
 #	plot(x = fullData$index, y = fullData$Volume, col = "white", 
 #			ylim = c(0, max(fullData$Volume)))
 #	rect(xleft = fullData$index - 0.5, xright = fullData$index + 0.5, 
@@ -139,15 +175,24 @@ formatFullData <- function(input) {
 	fullData$sar <- SAR(fullData[, c("High", "Low")], accel = c(0.01, 0.1))$sar
 	
 	# sliding PVT
+	pvt <- calcPVT(close = fullData$Close, volume = fullData$volumeAdj)
+	
 	fullData$slidingScaledPVT <- rep(NA, nrow(fullData))
 	fullData$avgVolume <- rep(NA, nrow(fullData))
 	for(i in 6:nrow(fullData)) {
 		# TODO need to find a real-time way of adjusting volume
-		pvt <- calcPVT(close = fullData$Close[1:i], volume = fullData$volumeAdj[1:i]) 
+		 
 		scaledPVT <- (pvt - min(pvt)) / diff(range(pvt))
 		scaledPVT <- min(fullData$Close[1:i]) + scaledPVT * abs(diff(range(fullData$Close[1:i])))
 		fullData$slidingScaledPVT[i] <- scaledPVT[i]
 		fullData$avgVolume[i] <- mean(fullData$Volume[1:i])
+	}
+	
+	fullData$pvt <- pvt
+	fullData$pvtMapped <- rep(NA, nrow(fullData))
+	for(i in 35:nrow(fullData)) {
+		fullData$pvtMapped[i] <- scale_and_map_pvt(fullData, matchedIdx = i, 
+				scalingRange = c(29, 10))
 	}
 	
 	# uniform PVT (PVT if volume was uniform), PVT, scaledPVT
@@ -157,7 +202,7 @@ formatFullData <- function(input) {
 	fullData$unifPvt[-(1:5)] <- calcPVT(close = fullData$Close[-(1:5)], volume = fullData$avgVolume[-(1:5)])
 	
 	# remove the weird last row
-	fullData <- fullData[-nrow(fullData), ]
+	fullData <- fullData[-nrow(fullData), ]   # TODO look into fixing this
 
 	
 	return(fullData)

@@ -10,40 +10,45 @@ library(oaPlots)
 library(tidyverse)
 
 load("./data/data2min.RData")
+load("./data/fullDataList.RData")
 
-source("./functions/plotFunctions.R")
-source("./functions/loadingFunctions.R")
-source("./functions/calcFunctions.R")
-source("./functions/trendlines.R")
+functionFiles <- list.files("./functions")
+for(iFile in 1:length(functionFiles)) {
+	source(paste0("./functions/", functionFiles[iFile]))
+}
 
 
-lookbackWindow <- 20
-minimumTimepoint <- 21
-stopLossMult = 2
-profitTakeMult = 6
+stopLossMult = 3.1
+profitTakeMult = 5
+r2Thresh <- 0.92   # .9
+chopThresh <- 0.52   # 0.382
+distanceFromTrendlineThreshold <- 1
+prevDistFromTrendlineThresholdMult <- 2.25
+
+prevDistFromTrendlineThreshold <- distanceFromTrendlineThreshold * 
+		prevDistFromTrendlineThresholdMult # 2
+
+stopLossType = "fixed"
 breakevenTriggerMult = 1
 setBreakeven <- FALSE
-stopLossType = "fixed"
-
-r2Thresh <- 0.8   # .9
-chopThresh <- 0.5   # 0.382
-distanceFromTrendlineThreshold <- 0.6
-distanceFromPvtThreshold <- 200   # TODO will work on this next
+lookbackWindow <- 20
+minimumTimepoint <- 21
 
 plVec <- numeric()
 k <- 1
 
 # TODO
 # walk through the plots manually starting with #1, AMD
-  #                                                 LNG 2024-08-09
- #                                                 NKE 2024-08-13
-  #  SBUX 08-12 for still monotonic not working
-# figure out a way to do volume properly
+#                                                 LNG 2024-08-09
+#                                                 NKE 2024-08-13
+
 # maybe look for trade confirmation. (to prevent immediate reversals)
-# I'm not sure Rsquared and Choppiness are ideal. Maybe find something that looks for avd distance from support line or something
+# does it make sense to sell after trendline broken  (that's another backtest)
+# I'm not sure Rsquared and Choppiness are ideal. Maybe find something that looks for avg distance from support line or something
 
 pdf("./plots/backtest.pdf", width = 10, height = 8)
 for(i in 1:length(dataList)) {   # i <- 1
+#for(i in 1:5) {
 	
 	cat(i)
 	fullData <- fullDataList[[i]]
@@ -51,17 +56,15 @@ for(i in 1:length(dataList)) {   # i <- 1
 	# find the streaks and take the 2nd true
 	tfVec <- (fullData$choppinessBest < chopThresh) & (fullData$rsquaredBest > r2Thresh)
 	tfVec[which(is.na(tfVec))] <- FALSE
-	streakVec <- count_consecutive_true(tfVec)  
-	
+  
 	matchedIdxVec <- which(tfVec == TRUE)
-#	matchedIdxVec <- which(streakVec == 3)   # TODO improve this logic
 	if(length(matchedIdxVec) > 0)
 		matchedIdxVec <- matchedIdxVec[matchedIdxVec >= minimumTimepoint]
 	
-	for(jMatch in seq_along(matchedIdxVec)) {  # jMatch <- 1
+	while(jMatch <= length(matchedIdxVec)) {  # jMatch <- 1
 		
 		matchedIdx <- matchedIdxVec[jMatch]
-		makeTrade <- FALSE
+		makeTrade <- TRUE
 		
 		# create fake data
 		ticker <- strsplit(names(dataList)[i], " ")[[1]][1]
@@ -73,30 +76,20 @@ for(i in 1:length(dataList)) {   # i <- 1
 		if(     
 				fullData$stillMonotonic[matchedIdx] & 
 				(fullData$Close[matchedIdx] > fullData$Close[matchedIdx - lookbackWindow]) & 
-				(fullData$Close[matchedIdx] - distanceFromPvtThreshold * fullData$atr[matchedIdx]  <
-					fullData$slidingScaledPVT[matchedIdx]  )
+				!(is.na(fullData$slope[matchedIdx])) 
 				) {
 			
+			# don't make the trade if the current Close is too far from the trendline (or under the trendline)
+			if(fullData$distanceAboveTrendline[matchedIdx] > distanceFromTrendlineThreshold | 
+					fullData$distanceAboveTrendline[matchedIdx] < 0)
+				makeTrade <- FALSE
 			
-			makeTrade <- TRUE
-			quantity <- 1
+			# don't make the trade if the previous Close values were too far from the trendline
+			if(fullData$precedingDistMax[matchedIdx] > prevDistFromTrendlineThreshold | 
+					fullData$precedingDistMin[matchedIdx] < -0.5)
+				makeTrade <- FALSE
 			
-			# find the best trendline and calculate the distance to it
-#			if(matchedIdx > 30) {  # TODO testing
-			{
-				bestSupport <- calcSupportLine(fullData, type = "rising", 
-						matchedIdx = matchedIdx)
-				
-				if(nrow(bestSupport) > 0) {
-					distanceAboveTrendline <- (fullData$Close[matchedIdx] - (bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
-							fullData$atr[matchedIdx]
-					if(distanceAboveTrendline > distanceFromTrendlineThreshold | distanceAboveTrendline < 0)
-						makeTrade <- FALSE
-				}
-			}
-		
 			
-#			}
 			
 			if(makeTrade) {
 				
@@ -128,36 +121,22 @@ for(i in 1:length(dataList)) {   # i <- 1
 		} else if(
 				fullData$stillMonotonic[matchedIdx] & 
 				(fullData$Close[matchedIdx] < fullData$Close[matchedIdx - lookbackWindow]) & 
-				(fullData$Close[matchedIdx] + distanceFromPvtThreshold * fullData$atr[matchedIdx] >
-					fullData$slidingScaledPVT[matchedIdx] )
+				!(is.na(fullData$slope[matchedIdx]))   # trendline exists
 				){  # SLD
 			
 			makeTrade <- TRUE
 			quantity <- -1
 			
-			# find the best trendline and calculate the distance to it
-#			if(matchedIdx > 30) { # TODO testing
+			# don't make the trade if the current Close is too far from the trendline (or under the trendline)
+			if(fullData$distanceAboveTrendline[matchedIdx] < (-1 * distanceFromTrendlineThreshold) |
+					fullData$distanceAboveTrendline[matchedIdx] > 0)
+				makeTrade <- FALSE
 			
-			bestSupport <- calcSupportLine(fullData, type = "falling", 
-					matchedIdx = matchedIdx)
+			# don't make the trade if the previous Close values were too far from the trendline
+			if(fullData$precedingDistMin[matchedIdx] < (-1 * prevDistFromTrendlineThreshold) | 
+					fullData$precedingDistMax[matchedIdx] > 0.5)
+				makeTrade <- FALSE
 			
-#			x = bestSupport$slope
-#			y = bestSupport$intercept
-#			plot(fullData$index[1:matchedIdx], fullData$High[1:matchedIdx])
-#			segments(x0 = 1, 
-#					x1 = matchedIdx, 
-#					y0 = y + x * 1, 
-#					y1 = y + x * matchedIdx, 
-#					lwd = 2)
-			
-			if(nrow(bestSupport) > 0) {
-				distanceBelowTrendline <- (fullData$Close[matchedIdx] - 
-							(bestSupport$intercept + bestSupport$slope * matchedIdx)) / 
-						fullData$atr[matchedIdx]
-				if(distanceBelowTrendline < (-1 * distanceFromTrendlineThreshold) | distanceBelowTrendline > 0)
-					makeTrade <- FALSE
-			}
-#			}
 			
 			if(makeTrade) {
 				
@@ -187,7 +166,7 @@ for(i in 1:length(dataList)) {   # i <- 1
 				}
 				
 			}			
-		}  
+		}  # close SLD bracket  
 		
 		if(makeTrade) {
 			fakeData <- data.frame(Symbol = ticker, Quantity = quantity, 
@@ -197,17 +176,20 @@ for(i in 1:length(dataList)) {   # i <- 1
 					fullDataList = fullDataList, 
 					plotNum = 1, 
 					stopLossMult = stopLossMult, profitTakeMult = profitTakeMult, 
-#				omitTimepoints = c(1:5, 191:195), 
+					omitTimepoints = NULL, 
 					includeADX = TRUE, 
 					dataType = "normal", 
-#					ending = "tradeStart"
+#					ending = "tradeStart",
+					titleAddendum = paste0(", pl = ", round(pl, 3))
 			)
 			
-			
-			plVec[k] <- pl
-			k <- k + 1
-			break
-		}
+			nextJMatch <- which(matchedIdxVec > matchedIdx + 20)
+			if(length(nextJMatch) == 0) {
+				jMatch <- length(matchedIdxVec) + 1
+			} else 
+				jMatch <- nextJMatch[1]
+		} else 
+			jMatch <- jMatch + 1
 		
 		
 	}

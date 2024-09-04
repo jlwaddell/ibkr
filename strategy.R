@@ -46,7 +46,7 @@ for(plotNum in 1:max(data$plotNum)) {  # plotNum <- 10
 			fullDataList = fullDataList,
 			plotNum = plotNum, 
 			stopLossMult = 2.5, profitTakeMult = 2.5, 
-			omitTimepoints = c(1:5, 191:195), 
+#			omitTimepoints = c(1:5, 191:195), 
 			includeADX = TRUE, 
 			dataType = "normal")
 }

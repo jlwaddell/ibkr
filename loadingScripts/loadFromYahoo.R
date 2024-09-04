@@ -10,14 +10,16 @@ library(oaPlots)
 library(readxl)
 library(tidyquant)
 
-source("./functions/plotFunctions.R")
-source("./functions/loadingFunctions.R")
-source("./functions/calcFunctions.R")
+functionFiles <- list.files("./functions")
+for(iFile in 1:length(functionFiles)) {
+	source(paste0("./functions/", functionFiles[iFile]))
+}
 
 startFromScratch <- FALSE
 if(startFromScratch) {
 	dataList <- list()
 } else {
+	load("./data/fullDataList.RData")
 	load("./data/data2min.RData")
 }
 
@@ -79,6 +81,10 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 		rawData <- rawData[-nrow(rawData), ]
 		dataList[[length(dataList)+1]] <- rawData
 		names(dataList)[length(dataList)] <- plotName
+		
+		fullData <- formatFullData(input = rawData)
+		fullDataList[[length(fullDataList)+1]] <- fullData
+		names(fullDataList)[length(fullDataList)] <- plotName
 	}
 	
 }
@@ -144,8 +150,8 @@ for(plotNum in 1:max(data$plotNum)) { # plotNum <- 1
 
 
 
-save(dataList, file = "./data/data2min.RData")
-
+#save(dataList, file = "./data/data2min.RData")
+#save(fullDataList, file = "./data/fullDataList.RData")
 
 
 
